@@ -1,0 +1,312 @@
+---
+title: "rpc"
+description: "Call Supabase RPC (Remote Procedure Call) functions directly from the command line"
+---
+
+## Overview
+
+The `--rpc` flag allows you to call PostgreSQL functions exposed through Supabase's RPC interface. This is useful for testing functions, debugging, or executing read-only operations.
+
+<Warning>
+SupaScan is designed for read-only operations. Only use with functions that don't modify data. SupaScan does not prevent write operations, so use with caution.
+</Warning>
+
+## Basic Usage
+
+```bash
+supascan --url <url> --key <key> --rpc schema.function_name
+```
+
+## Syntax
+
+The RPC flag requires the format:
+
+```
+schema.rpc_name
+```
+
+- **schema**: The PostgreSQL schema containing the function (usually `public`)
+- **rpc_name**: The name of the RPC function
+
+## Simple RPC Calls
+
+### Function with No Parameters
+
+```bash
+supascan --url <url> --key <key> --rpc public.get_all_users
+```
+
+**Example output:**
+
+```
+ℹ Calling RPC: public.get_all_users
+
+RPC Result:
+
+┌─────────┬──────────────────────────────────────┬──────────────┐
+│ (index) │ id                                   │ email        │
+├─────────┼──────────────────────────────────────┼──────────────┤
+│ 0       │ '550e8400-e29b-41d4-a716-446655440000' │ 'user1@...' │
+│ 1       │ '550e8400-e29b-41d4-a716-446655440001' │ 'user2@...' │
+└─────────┴──────────────────────────────────────┴──────────────┘
+```
+
+## Passing Arguments
+
+Use the `--args` flag to pass JSON arguments to the RPC function:
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.get_user_by_id \
+  --args '{"user_id": "550e8400-e29b-41d4-a716-446655440000"}'
+```
+
+### Argument Format
+
+Arguments must be valid JSON:
+
+```bash
+--args '{"param1": "value1", "param2": 42, "param3": true}'
+```
+
+## Environment Variables in Arguments
+
+You can reference environment variables in arguments using the `$VARIABLE_NAME` syntax:
+
+```bash
+export USER_ID="550e8400-e29b-41d4-a716-446655440000"
+
+supascan --url <url> --key <key> \
+  --rpc public.get_user_by_id \
+  --args '{"user_id": $USER_ID}'
+```
+
+SupaScan will automatically replace `$USER_ID` with the environment variable value.
+
+### Environment Variable Rules
+
+- Must start with a letter or underscore
+- Can contain letters, numbers, and underscores
+- Convention is to use UPPER_CASE
+- Error if variable is not defined
+
+**Example with multiple variables:**
+
+```bash
+export USER_ID="550e8400-e29b-41d4-a716-446655440000"
+export MAX_RESULTS="50"
+
+supascan --url <url> --key <key> \
+  --rpc public.search_users \
+  --args '{"user_id": $USER_ID, "limit": $MAX_RESULTS}'
+```
+
+## Limiting Results
+
+For RPCs that return multiple rows, use `--limit` to control output:
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.get_all_posts \
+  --limit 20
+```
+
+Default limit is 10 rows.
+
+## Query Execution Plans
+
+Use `--explain` to see the PostgreSQL query execution plan:
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.get_user_posts \
+  --args '{"user_id": "550e8400-e29b-41d4-a716-446655440000"}' \
+  --explain
+```
+
+**Example output:**
+
+```
+ℹ Calling RPC: public.get_user_posts
+ℹ Arguments: {"user_id":"550e8400-e29b-41d4-a716-446655440000"}
+
+Query Execution Plan:
+
+Seq Scan on posts  (cost=0.00..35.50 rows=10 width=64)
+  Filter: (user_id = '550e8400-e29b-41d4-a716-446655440000'::uuid)
+```
+
+This is useful for:
+- Debugging slow queries
+- Understanding query performance
+- Identifying missing indexes
+
+## JSON Output
+
+Output RPC results as JSON:
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.get_user_posts \
+  --args '{"user_id": "550e8400-e29b-41d4-a716-446655440000"}' \
+  --json
+```
+
+**Example output:**
+
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "title": "First Post",
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "created_at": "2024-01-15T10:30:00.000Z"
+  },
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174001",
+    "title": "Second Post",
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "created_at": "2024-01-16T11:20:00.000Z"
+  }
+]
+```
+
+## Error Handling
+
+### Invalid RPC Format
+
+```bash
+supascan --url <url> --key <key> --rpc invalid_format
+```
+
+```
+✖ Invalid RPC format. Use schema.rpc_name
+```
+
+### Function Not Found
+
+```bash
+supascan --url <url> --key <key> --rpc public.nonexistent_function
+```
+
+```
+✖ RPC call failed: function public.nonexistent_function does not exist
+```
+
+### Invalid Arguments
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.get_user_by_id \
+  --args 'not valid json'
+```
+
+```
+✖ Failed to parse RPC arguments: Unexpected token 'n', "not valid "... is not valid JSON
+```
+
+### Missing Required Parameter
+
+```bash
+supascan --url <url> --key <key> --rpc public.get_user_by_id
+```
+
+```
+✖ RPC call failed: missing required parameter "user_id"
+```
+
+### Environment Variable Not Found
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.get_user_by_id \
+  --args '{"user_id": $UNDEFINED_VAR}'
+```
+
+```
+✖ Failed to parse RPC arguments: Environment variable UNDEFINED_VAR not found
+```
+
+## Common Use Cases
+
+### Test RPC Function
+
+```bash
+supascan --url <url> --key <key> --rpc public.get_statistics
+```
+
+### Debug with Execution Plan
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.search_posts \
+  --args '{"query": "test"}' \
+  --explain
+```
+
+### Export RPC Results
+
+```bash
+supascan --url <url> --key <key> \
+  --rpc public.get_report_data \
+  --json > report.json
+```
+
+### Using Environment Variables for Secrets
+
+```bash
+export API_TOKEN="secret_token"
+
+supascan --url <url> --key <key> \
+  --rpc public.authenticate_external \
+  --args '{"token": $API_TOKEN}'
+```
+
+## Discovering Available RPCs
+
+To find available RPC functions, run a full analysis first:
+
+```bash
+supascan --url <url> --key <key>
+```
+
+The output will show all available RPC functions with their parameters:
+
+```
+RPCs: 3
+  * get_user_posts
+    - user_id: uuid (required)
+  * search_posts
+    - query: text (required)
+    - limit: int4 (optional)
+  * get_statistics
+    No parameters
+```
+
+## Options Reference
+
+<ParamField path="--rpc" type="string" required>
+  RPC function to call in format `schema.function_name`
+</ParamField>
+
+<ParamField path="--args" type="string">
+  JSON arguments for the RPC call. Supports `$VAR` syntax for environment variables
+</ParamField>
+
+<ParamField path="--limit" type="number" default="10">
+  Maximum number of rows to return for array results
+</ParamField>
+
+<ParamField path="--explain" type="boolean">
+  Show PostgreSQL query execution plan instead of results
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output results as JSON instead of formatted table
+</ParamField>
+
+## Related Commands
+
+- [analyze](/cli/analyze) - Discover available RPC functions
+- [dump](/cli/dump) - Extract table data
+- [Options Reference](/cli/options) - All available CLI options

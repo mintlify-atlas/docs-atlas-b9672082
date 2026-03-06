@@ -1,0 +1,221 @@
+---
+title: "dump"
+description: "Extract data from Supabase tables or export Swagger/OpenAPI schema definitions"
+---
+
+## Overview
+
+The `--dump` flag allows you to extract data from specific tables or export schema definitions from your Supabase database.
+
+## Basic Usage
+
+### Dump Table Data
+
+```bash
+supascan --url <url> --key <key> --dump schema.table
+```
+
+### Dump Schema Definition
+
+```bash
+supascan --url <url> --key <key> --dump schema
+```
+
+## Syntax
+
+The dump flag accepts two formats:
+
+- **`schema.table`** - Dump data from a specific table
+- **`schema`** - Export Swagger/OpenAPI definition for the schema
+
+## Dumping Table Data
+
+### Basic Table Dump
+
+```bash
+supascan --url <url> --key <key> --dump public.users
+```
+
+**Example output:**
+
+```
+ℹ Dumping table: public.users (limit: 10)
+
+Table: public.users (150 total rows, showing 10)
+
+┌─────────┬──────────────────────────────────────┬──────────────┬───────────────────────┐
+│ (index) │ id                                   │ email        │ created_at            │
+├─────────┼──────────────────────────────────────┼──────────────┼───────────────────────┤
+│ 0       │ '550e8400-e29b-41d4-a716-446655440000' │ 'user1@...' │ '2024-01-15T10:30:00' │
+│ 1       │ '550e8400-e29b-41d4-a716-446655440001' │ 'user2@...' │ '2024-01-16T11:20:00' │
+└─────────┴──────────────────────────────────────┴──────────────┴───────────────────────┘
+```
+
+### Controlling Row Limit
+
+By default, SupaScan limits output to 10 rows. You can change this with the `--limit` flag:
+
+```bash
+supascan --url <url> --key <key> --dump public.users --limit 100
+```
+
+### JSON Output
+
+Output table data as JSON:
+
+```bash
+supascan --url <url> --key <key> --dump public.users --json
+```
+
+**Example output:**
+
+```json
+{
+  "count": 150,
+  "rows": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "email": "user1@example.com",
+      "created_at": "2024-01-15T10:30:00.000Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "email": "user2@example.com",
+      "created_at": "2024-01-16T11:20:00.000Z"
+    }
+  ]
+}
+```
+
+## Dumping Schema Definitions
+
+When you provide only a schema name (without a table), SupaScan exports the Swagger/OpenAPI definition:
+
+```bash
+supascan --url <url> --key <key> --dump public
+```
+
+This returns the full OpenAPI specification for the schema, including:
+- Available tables and their columns
+- RPC function definitions
+- Data types and formats
+- API paths and operations
+
+**Example output:**
+
+```json
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "PostgREST API",
+    "version": "11.2.2"
+  },
+  "definitions": {
+    "users": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      }
+    }
+  }
+}
+```
+
+## Error Handling
+
+### Invalid Format
+
+```bash
+supascan --url <url> --key <key> --dump invalid.format.table
+```
+
+```
+✖ Invalid dump format. Use schema.table or schema
+```
+
+### Table Not Found or Access Denied
+
+```bash
+supascan --url <url> --key <key> --dump public.nonexistent
+```
+
+```
+✖ Failed to dump table: relation "public.nonexistent" does not exist
+```
+
+### Permission Denied
+
+```bash
+supascan --url <url> --key <key> --dump public.admin_table
+```
+
+```
+✖ Failed to dump table: permission denied for table admin_table
+```
+
+## Common Use Cases
+
+### Export User Data
+
+```bash
+supascan --url <url> --key <key> --dump public.users --limit 1000 --json > users.json
+```
+
+### Preview Table Contents
+
+```bash
+supascan --url <url> --key <key> --dump public.posts --limit 5
+```
+
+### Extract Schema for Documentation
+
+```bash
+supascan --url <url> --key <key> --dump public > schema.json
+```
+
+### Dump with Custom Headers
+
+```bash
+supascan --url <url> --key <key> \
+  --dump public.users \
+  --header "X-Custom-Auth: token"
+```
+
+## Implementation Details
+
+The dump command uses the Supabase client to:
+
+1. **For table dumps**: Execute a `SELECT *` query with the specified limit
+2. **For schema dumps**: Query the PostgREST schema endpoint
+3. **Count total rows**: Use Supabase's count feature to show total vs. displayed rows
+
+<Note>
+The dump command respects Row Level Security (RLS) policies. You will only see data that your API key has permission to access.
+</Note>
+
+## Options Reference
+
+<ParamField path="--dump" type="string" required>
+  Table or schema to dump in format `schema.table` or `schema`
+</ParamField>
+
+<ParamField path="--limit" type="number" default="10">
+  Maximum number of rows to return (only applies to table dumps)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output results as JSON instead of formatted table
+</ParamField>
+
+## Related Commands
+
+- [analyze](/cli/analyze) - Full security analysis
+- [rpc](/cli/rpc) - Call RPC functions
+- [Options Reference](/cli/options) - All available CLI options

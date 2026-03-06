@@ -1,0 +1,104 @@
+---
+title: Overview
+description: Introduction to the @supascan/core library for Supabase security analysis
+---
+
+The `@supascan/core` library provides a comprehensive toolkit for analyzing Supabase instances, extracting credentials from web applications, and testing database access permissions.
+
+## Installation
+
+Install the library using your preferred package manager:
+
+```bash
+npm install @supascan/core
+```
+
+```bash
+pnpm add @supascan/core
+```
+
+```bash
+yarn add @supascan/core
+```
+
+## Core Features
+
+### Credential Extraction
+
+Extract Supabase credentials from web applications by analyzing HTML pages and JavaScript files:
+
+```typescript
+import { extractFromUrl } from '@supascan/core';
+
+const generator = extractFromUrl('https://example.com');
+
+for await (const event of generator) {
+  if (event.type === 'credentials_found') {
+    console.log('Found credentials:', event.data);
+  }
+}
+```
+
+### Database Analysis
+
+Analyze Supabase instances to discover schemas, tables, RPCs, and test access permissions:
+
+```typescript
+import { createClient } from '@supabase/supabase-js';
+import { analyze } from '@supascan/core';
+
+const client = createClient(url, key);
+const generator = analyze(client, url, key);
+
+for await (const event of generator) {
+  if (event.type === 'analysis_completed') {
+    console.log('Analysis result:', event.data.result);
+  }
+}
+```
+
+### Supabase Client Utilities
+
+Access individual Supabase operations:
+
+```typescript
+import { getSchemas, getTables, getRPCs, testTablesRead } from '@supascan/core';
+
+// Discover available schemas
+const schemasGen = getSchemas(client);
+for await (const event of schemasGen) {
+  if (event.type === 'schemas_discovered') {
+    console.log('Schemas:', event.data.schemas);
+  }
+}
+```
+
+## Event-Driven Architecture
+
+All async operations in `@supascan/core` use AsyncGenerators that yield events and return a final `Result` type. This allows you to:
+
+- Track progress in real-time
+- Display status updates to users
+- Handle errors gracefully
+- Cancel operations if needed
+
+## Type Safety
+
+The library is written in TypeScript and exports comprehensive type definitions for all events, results, and data structures.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Analyzer" icon="magnifying-glass" href="/api/analyzer">
+    Learn about the analyze() function
+  </Card>
+  <Card title="Extractor" icon="download" href="/api/extractor">
+    Extract credentials from websites
+  </Card>
+  <Card title="Supabase Client" icon="database" href="/api/supabase-client">
+    Work with Supabase operations
+  </Card>
+  <Card title="Types" icon="code" href="/api/types/analysis-result">
+    Explore type definitions
+  </Card>
+</CardGroup>

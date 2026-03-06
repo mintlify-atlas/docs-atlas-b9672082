@@ -1,0 +1,477 @@
+---
+title: 'Schema Discovery'
+description: 'How SupaScan enumerates database schemas, tables, and RPC functions from the Supabase REST API'
+---
+
+## Overview
+
+Schema discovery is the reconnaissance phase of SupaScan's security analysis. Using only the anonymous API key, SupaScan enumerates the entire database structure including schemas, tables, views, and RPC (Remote Procedure Call) functions.
+
+## How It Works
+
+SupaScan leverages a clever technique: it intentionally queries a non-existent schema, and Supabase's error messages helpfully reveal what schemas actually exist.
+
+## Schema Enumeration
+
+The schema discovery process exploits error message disclosure:
+
+```typescript
+export async function* getSchemas(
+  client: SupabaseClient,
+  nonexistantSchema = "NONEXISTANT_SCHEMA_THAT_SHOULDNT_EXIST",
+): AsyncGenerator<SupabaseEvent, Result<string[]>> {
+  yield { type: "schemas_fetch_started", data: {} };
+
+  const { data, error } = await client
+    .schema(nonexistantSchema)
+    .from("")
+    .select();
+
+  if (data) {
+    return err(new Error("Schema exists, this shouldn't happen"));
+  }
+
+  const fromMessage =
+    error?.message
+      .split("following: ")[1]
+      ?.split(",")
+      .map((schema) => schema.trim()) ?? [];
+
+  const fromHint =
+    (error as { hint?: string })?.hint
+      ?.split("exposed: ")[1]
+      ?.split(",")
+      .map((schema) => schema.trim()) ?? [];
+
+  const schemas = fromMessage.length > 0 ? fromMessage : fromHint;
+
+  yield { type: "schemas_discovered", data: { schemas } };
+  return ok(schemas);
+}
+```
+
+### Why This Works
+
+<Steps>
+  <Step title="Query Invalid Schema">
+    SupaScan requests a schema that doesn't exist: `NONEXISTANT_SCHEMA_THAT_SHOULDNT_EXIST`
+  </Step>
+  
+  <Step title="Parse Error Response">
+    Supabase returns an error message listing the available schemas:
+    ```
+    "The schema must be one of the following: public, auth, storage"
+    ```
+  </Step>
+  
+  <Step title="Extract Schema Names">
+    SupaScan parses the error message and extracts schema names from either:
+    - The `message` field: `"following: public, auth, storage"`
+    - The `hint` field: `"exposed: public, auth"`
+  </Step>
+  
+  <Step title="Return Schema List">
+    All discovered schemas are returned for further enumeration
+  </Step>
+</Steps>
+
+## Swagger/OpenAPI Discovery
+
+Supabase exposes its REST API schema through an OpenAPI (Swagger) specification. SupaScan fetches this to discover tables and RPCs:
+
+```typescript
+async function getSwagger(
+  client: SupabaseClient,
+  schema: string,
+): Promise<Result<SupabaseSwagger>> {
+  const { data, error } = await client.schema(schema).from("").select();
+
+  if (!error && data) {
+    return ok(data as unknown as SupabaseSwagger);
+  }
+
+  const schemaCacheResult = await fetchSchemaCache(client, schema);
+  if (schemaCacheResult.success) {
+    return schemaCacheResult;
+  }
+
+  return err(error ?? new Error("Failed to fetch schema"));
+}
+```
+
+### Swagger Structure
+
+The Swagger specification contains a `paths` object that maps endpoints to database objects:
+
+```typescript
+export type SupabaseSwagger = {
+  swagger: string;
+  paths: Record<string, unknown>;
+  info?: {
+    title?: string;
+    description?: string;
+    version?: string;
+  };
+  [key: string]: unknown;
+};
+```
+
+#### Example Swagger Response
+
+```json
+{
+  "swagger": "2.0",
+  "paths": {
+    "/users": { "get": {}, "post": {} },
+    "/posts": { "get": {}, "post": {} },
+    "/rpc/get_user_stats": { "post": {} },
+    "/rpc/delete_old_posts": { "post": {} }
+  }
+}
+```
+
+## Table Discovery
+
+Tables are identified by parsing the Swagger paths:
+
+```typescript
+export async function* getTables(
+  client: SupabaseClient,
+  schema: string,
+): AsyncGenerator<SupabaseEvent, Result<string[]>> {
+  yield { type: "swagger_fetch_started", data: { schema } };
+
+  const swaggerResult = await getSwagger(client, schema);
+
+  if (!swaggerResult.success) {
+    return err(swaggerResult.error);
+  }
+
+  yield { type: "swagger_fetched", data: { schema } };
+
+  const tables = Object.keys(swaggerResult.value.paths)
+    .filter((key) => !key.startsWith("/rpc/"))
+    .map((key) => key.slice(1))
+    .filter((key) => !!key);
+
+  yield { type: "tables_discovered", data: { schema, tables } };
+  return ok(tables);
+}
+```
+
+### Logic Breakdown
+
+1. Fetch the Swagger specification for the schema
+2. Extract all path keys from the `paths` object
+3. Filter out RPC endpoints (those starting with `/rpc/`)
+4. Remove the leading `/` from each path to get table names
+5. Filter out empty strings
+
+**Example:**
+- `/users` → `users` (table)
+- `/posts` → `posts` (table)
+- `/rpc/get_stats` → filtered out (RPC function)
+
+## RPC Function Discovery
+
+RPC functions are discovered using the inverse logic - finding paths that START with `/rpc/`:
+
+```typescript
+export async function* getRPCs(
+  client: SupabaseClient,
+  schema: string,
+): AsyncGenerator<SupabaseEvent, Result<string[]>> {
+  yield { type: "swagger_fetch_started", data: { schema } };
+
+  const swaggerResult = await getSwagger(client, schema);
+
+  if (!swaggerResult.success) {
+    return err(swaggerResult.error);
+  }
+
+  yield { type: "swagger_fetched", data: { schema } };
+
+  const rpcs = Object.keys(swaggerResult.value.paths)
+    .filter((key) => key.startsWith("/rpc/"))
+    .map((key) => key.slice(1));
+
+  yield { type: "rpcs_discovered", data: { schema, rpcs } };
+  return ok(rpcs);
+}
+```
+
+## RPC Parameter Discovery
+
+SupaScan goes further by extracting detailed parameter information for each RPC function:
+
+```typescript
+export async function getRPCsWithParameters(
+  client: SupabaseClient,
+  schema: string,
+): Promise<Result<RPCFunction[]>> {
+  const swaggerResult = await getSwagger(client, schema);
+
+  if (!swaggerResult.success) {
+    return err(swaggerResult.error);
+  }
+
+  const rpcFunctions: RPCFunction[] = [];
+
+  Object.entries(swaggerResult.value.paths).forEach(
+    ([path, methods]: [string, any]) => {
+      if (path.startsWith("/rpc/")) {
+        const rpcName = path.slice(1);
+
+        const postMethod = methods.post;
+        if (postMethod && postMethod.parameters) {
+          const parameters: RPCParameter[] = [];
+
+          postMethod.parameters.forEach((param: any) => {
+            if (
+              param.in === "body" &&
+              param.schema &&
+              param.schema.properties
+            ) {
+              const requiredParams = param.schema.required || [];
+
+              Object.entries(param.schema.properties).forEach(
+                ([paramName, paramDef]: [string, any]) => {
+                  parameters.push({
+                    name: paramName,
+                    type: paramDef.type || "unknown",
+                    format: paramDef.format,
+                    required: requiredParams.includes(paramName),
+                    description: paramDef.description,
+                  });
+                },
+              );
+            }
+          });
+
+          rpcFunctions.push({
+            name: rpcName,
+            parameters,
+          });
+        }
+      }
+    },
+  );
+
+  return ok(rpcFunctions);
+}
+```
+
+### Parameter Types
+
+Each discovered parameter includes rich metadata:
+
+```typescript
+export type RPCParameter = {
+  name: string;           // Parameter name
+  type: string;           // Data type (integer, string, etc.)
+  format?: string;        // Format hint (uuid, timestamp, etc.)
+  required: boolean;      // Whether the parameter is required
+  description?: string;   // Documentation from the database
+};
+
+export type RPCFunction = {
+  name: string;           // RPC function name
+  parameters: RPCParameter[];
+};
+```
+
+## Schema Cache Fallback
+
+When direct Swagger access fails, SupaScan tries the schema cache endpoint:
+
+```typescript
+async function fetchSchemaCache(
+  client: SupabaseClient,
+  schema: string,
+): Promise<Result<SupabaseSwagger>> {
+  const { supabaseUrl, supabaseKey } = client as unknown as {
+    supabaseUrl: string;
+    supabaseKey: string;
+  };
+
+  try {
+    const res = await fetch(`${supabaseUrl}/rest-admin/v1/schema_cache`, {
+      headers: { apikey: supabaseKey },
+    });
+
+    if (!res.ok) {
+      return err(new Error(`schema_cache fetch failed: ${res.status}`));
+    }
+
+    const cache = await res.json() as {
+      dbTables?: Array<
+        [
+          { qiSchema: string; qiName: string },
+          { tableName: string; tableSchema: string },
+        ]
+      >;
+      dbRoutines?: Array<[{ qiSchema: string; qiName: string }, unknown]>;
+    };
+
+    const paths: Record<string, unknown> = {};
+
+    for (const [meta, info] of cache.dbTables ?? []) {
+      if (meta.qiSchema === schema) {
+        paths[`/${meta.qiName}`] = { get: {}, post: {} };
+      }
+    }
+
+    for (const [meta] of cache.dbRoutines ?? []) {
+      if (meta.qiSchema === schema) {
+        paths[`/rpc/${meta.qiName}`] = { post: {} };
+      }
+    }
+
+    if (Object.keys(paths).length === 0) {
+      return err(new Error(`No tables found for schema: ${schema}`));
+    }
+
+    return ok({ swagger: "2.0", paths } as SupabaseSwagger);
+  } catch (e) {
+    return err(e instanceof Error ? e : new Error(String(e)));
+  }
+}
+```
+
+This endpoint (`/rest-admin/v1/schema_cache`) provides metadata about database objects including:
+- `dbTables` - Table definitions with schema and name
+- `dbRoutines` - RPC function definitions
+
+## Complete Analysis Flow
+
+The `analyze()` function in `packages/core/src/analyzer.ts` orchestrates the complete discovery process:
+
+<Steps>
+  <Step title="Enumerate Schemas">
+    Discover all available schemas using the error message technique
+  </Step>
+  
+  <Step title="For Each Schema">
+    Process each schema in sequence (or a specific schema if provided)
+  </Step>
+  
+  <Step title="Fetch Tables">
+    Extract table names from the Swagger/OpenAPI specification
+  </Step>
+  
+  <Step title="Fetch RPCs">
+    Extract RPC function names and their parameters
+  </Step>
+  
+  <Step title="Test Access (Optional)">
+    Optionally test read access to each discovered table
+  </Step>
+  
+  <Step title="Build Schema Analysis">
+    Compile all discovered information into a structured result
+  </Step>
+</Steps>
+
+```typescript
+for (const schema of schemasToAnalyze) {
+  yield { type: "schema_analysis_started", data: { schema } };
+
+  const tablesGen = getTables(client, schema);
+  let tablesResult;
+  while (true) {
+    const next = await tablesGen.next();
+    if (next.done) {
+      tablesResult = next.value;
+      break;
+    }
+    yield next.value;
+  }
+
+  const rpcsGen = getRPCs(client, schema);
+  let rpcsResult;
+  while (true) {
+    const next = await rpcsGen.next();
+    if (next.done) {
+      rpcsResult = next.value;
+      break;
+    }
+    yield next.value;
+  }
+
+  const rpcFunctionsResult = await getRPCsWithParameters(client, schema);
+
+  if (!tablesResult?.success || !rpcsResult?.success) {
+    continue;
+  }
+
+  const tables = tablesResult.value;
+  let tableAccess: Record<string, TableAccessResult> = {};
+
+  if (!options.skipAccessTest) {
+    const accessGen = testTablesRead(client, schema, tables);
+    let accessResult;
+    while (true) {
+      const next = await accessGen.next();
+      if (next.done) {
+        accessResult = next.value;
+        break;
+      }
+      yield next.value;
+    }
+
+    if (!accessResult?.success) {
+      continue;
+    }
+
+    tableAccess = accessResult.value;
+  }
+
+  const analysis: SchemaAnalysis = {
+    tables,
+    rpcs: rpcsResult.value,
+    rpcFunctions: rpcFunctionsResult.success ? rpcFunctionsResult.value : [],
+    tableAccess,
+  };
+
+  schemaDetails[schema] = analysis;
+
+  yield {
+    type: "schema_analysis_completed",
+    data: { schema, analysis },
+  };
+}
+```
+
+## Event-Driven Discovery
+
+Schema discovery emits events throughout the process:
+
+1. **`schemas_fetch_started`** - Schema enumeration begins
+2. **`schemas_discovered`** - Schema list obtained
+3. **`schema_analysis_started`** - Analysis begins for a specific schema
+4. **`swagger_fetch_started`** - Fetching API specification
+5. **`swagger_fetched`** - Specification retrieved
+6. **`tables_discovered`** - Table list obtained
+7. **`rpcs_discovered`** - RPC function list obtained
+8. **`schema_analysis_completed`** - Schema analysis finished
+
+## Security Implications
+
+<Warning>
+The fact that SupaScan can enumerate your entire database schema using only the anonymous key is a **feature of Supabase's REST API**, not a vulnerability. However, this means attackers can map your database structure even if they can't access the data (thanks to proper RLS policies).
+</Warning>
+
+<Info>
+This is why proper RLS policies are critical - assume attackers know your schema structure and plan accordingly.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="RLS Testing" icon="shield" href="/concepts/rls-testing">
+    Learn how discovered tables are tested for security
+  </Card>
+  <Card title="Credential Extraction" icon="key" href="/concepts/credential-extraction">
+    Understand how credentials are discovered
+  </Card>
+</CardGroup>

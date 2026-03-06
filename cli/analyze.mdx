@@ -1,0 +1,219 @@
+---
+title: "analyze"
+description: "Run security analysis on your Supabase database to discover exposed tables, RPC functions, and potential vulnerabilities"
+---
+
+## Overview
+
+The `analyze` command is the default operation of SupaScan. It performs a comprehensive security analysis of your Supabase database, discovering schemas, tables, RPC functions, and their access permissions.
+
+## Basic Usage
+
+```bash
+supascan --url <url> --key <key>
+```
+
+By default, SupaScan will analyze all available schemas in your Supabase database.
+
+## Authentication
+
+SupaScan requires Supabase credentials to connect to your database. You have two options:
+
+### Option 1: Explicit Credentials
+
+```bash
+supascan --url https://your-project.supabase.co --key eyJhbG...
+```
+
+### Option 2: Extract from JavaScript (Experimental)
+
+```bash
+supascan --extract https://yourapp.com
+```
+
+SupaScan will attempt to extract Supabase credentials from JavaScript files on the target URL.
+
+<Warning>
+The `--extract` flag is experimental and will display a warning. Use `--suppress-experimental-warnings` to hide the warning.
+</Warning>
+
+## Analyzing Specific Schemas
+
+To analyze a specific schema instead of all schemas:
+
+```bash
+supascan --url <url> --key <key> --schema public
+```
+
+## What Gets Analyzed
+
+The analyze command performs the following checks:
+
+### Database Discovery
+- **Schemas**: All accessible schemas in the database
+- **Tables**: All tables within each schema
+- **RPC Functions**: All callable Remote Procedure Call functions
+
+### Access Testing
+
+For each table discovered, SupaScan tests access permissions:
+
+- **Readable**: Tables that can be queried with row count estimates
+- **Empty/Protected**: Tables that return 0 rows (could be empty or protected by RLS)
+- **Denied**: Tables that return permission denied errors
+
+### RPC Analysis
+
+For each RPC function, SupaScan extracts:
+- Function name and schema
+- Parameters with their types
+- Required vs optional parameters
+- Parameter formats (e.g., date, uuid, int4)
+
+### JWT Token Information
+
+SupaScan decodes and displays information from your JWT token:
+- Issuer (iss)
+- Audience (aud)
+- Role
+- Expiration time
+- Issue time
+
+## Output Formats
+
+### Console Output (Default)
+
+By default, SupaScan provides a formatted console output:
+
+```bash
+supascan --url <url> --key <key>
+```
+
+**Example output:**
+
+```
+============================================================
+  SUPABASE DATABASE ANALYSIS
+============================================================
+
+TARGET SUMMARY
+--------------------
+Domain: your-project.supabase.co
+Service: supabase
+Project ID: your-project
+
+JWT TOKEN INFO
+--------------------
+Issuer: https://your-project.supabase.co/auth/v1
+Audience: authenticated
+Role: anon
+
+DATABASE ANALYSIS
+--------------------
+Schemas discovered: 2
+
+Schema: public
+
+Tables: 5
+  3 exposed | 1 empty/protected | 1 denied
+
+  [+] users (~42 rows exposed)
+  [+] posts (~150 rows exposed)
+  [+] comments (~89 rows exposed)
+  [-] profiles (0 rows - empty or RLS)
+  [X] admin_settings (access denied)
+
+RPCs: 2
+  * get_user_posts
+    - user_id: uuid (required)
+  * search_posts
+    - query: text (required)
+    - limit: int4 (optional)
+```
+
+### JSON Output
+
+For programmatic access or integration with other tools:
+
+```bash
+supascan --url <url> --key <key> --json
+```
+
+Outputs the full analysis result as JSON to stdout. See [Output Formats](/cli/output-formats) for details.
+
+### HTML Report
+
+Generate an interactive HTML report that opens in your browser:
+
+```bash
+supascan --url <url> --key <key> --html
+```
+
+The HTML report includes:
+- Interactive UI for exploring results
+- Real-time analysis capabilities
+- Embedded credentials (stored in temporary file)
+- Auto-opens in your default browser
+
+<Note>
+The HTML report contains your Supabase credentials encoded in the file. Keep the generated file secure and delete it after use.
+</Note>
+
+## Advanced Options
+
+### Debug Mode
+
+Enable detailed logging for troubleshooting:
+
+```bash
+supascan --url <url> --key <key> --debug
+```
+
+### Custom Headers
+
+Add custom HTTP headers to requests (useful for authentication or routing):
+
+```bash
+supascan --url <url> --key <key> \
+  --header "X-Custom-Header: value" \
+  --header "Authorization: Bearer token"
+```
+
+The `-H` shorthand is also available:
+
+```bash
+supascan -u <url> -k <key> -H "X-Custom-Header: value"
+```
+
+## Common Use Cases
+
+### Quick Security Audit
+
+```bash
+supascan --extract https://yourapp.com
+```
+
+### Focused Analysis
+
+```bash
+supascan --url <url> --key <key> --schema public
+```
+
+### CI/CD Integration
+
+```bash
+supascan --url <url> --key <key> --json > analysis.json
+```
+
+### Detailed Investigation
+
+```bash
+supascan --url <url> --key <key> --html
+```
+
+## Related Commands
+
+- [dump](/cli/dump) - Extract data from specific tables
+- [rpc](/cli/rpc) - Call RPC functions directly
+- [extract](/cli/extract) - Extract credentials from JavaScript files
+- [Output Formats](/cli/output-formats) - Detailed output format documentation

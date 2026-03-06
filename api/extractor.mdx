@@ -1,0 +1,229 @@
+---
+title: extractFromUrl()
+description: Extract Supabase credentials from web applications by analyzing HTML and JavaScript files
+---
+
+The `extractFromUrl()` function analyzes a web page or JavaScript file to extract Supabase credentials (URL and API key) that may be publicly exposed.
+
+## Function Signature
+
+```typescript extractor.ts
+export async function* extractFromUrl(
+  url: string,
+): AsyncGenerator<ExtractorEvent, Result<ExtractedCredentials>>
+```
+
+## Parameters
+
+<ParamField path="url" type="string" required>
+  The URL to analyze. Can be an HTML page or a JavaScript file. The extractor will automatically detect the content type and parse accordingly.
+</ParamField>
+
+## Return Value
+
+Returns an `AsyncGenerator` that:
+- **Yields**: `ExtractorEvent` objects during extraction
+- **Returns**: `Result<ExtractedCredentials>` when complete
+
+## Events
+
+The extractor emits the following events during execution:
+
+<ResponseField name="extraction_started" type="ExtractorEvent">
+  Emitted when extraction begins
+  
+  ```typescript
+  { type: "extraction_started", data: { url: string } }
+  ```
+</ResponseField>
+
+<ResponseField name="content_fetched" type="ExtractorEvent">
+  Emitted after fetching the URL content
+  
+  ```typescript
+  {
+    type: "content_fetched",
+    data: {
+      url: string,
+      size: number,
+      contentType: string
+    }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="html_detected" type="ExtractorEvent">
+  Emitted when HTML content is detected
+  
+  ```typescript
+  { type: "html_detected", data: { scriptCount: number } }
+  ```
+</ResponseField>
+
+<ResponseField name="script_checking" type="ExtractorEvent">
+  Emitted when checking an external script
+  
+  ```typescript
+  { type: "script_checking", data: { scriptUrl: string } }
+  ```
+</ResponseField>
+
+<ResponseField name="credentials_found" type="ExtractorEvent">
+  Emitted when credentials are discovered
+  
+  ```typescript
+  { type: "credentials_found", data: { source: string } }
+  ```
+</ResponseField>
+
+<ResponseField name="extraction_completed" type="ExtractorEvent">
+  Emitted when extraction completes successfully
+  
+  ```typescript
+  {
+    type: "extraction_completed",
+    data: { credentials: ExtractedCredentials }
+  }
+  ```
+</ResponseField>
+
+## How It Works
+
+The extractor uses a multi-stage approach to find Supabase credentials:
+
+### 1. Content Type Detection
+
+First, it determines if the content is:
+- HTML (parses for inline and external scripts)
+- JavaScript (analyzes directly)
+- Other (attempts pattern matching)
+
+### 2. Pattern Matching
+
+Searches for:
+- Supabase URLs: `https://*.supabase.co`
+- JWT tokens: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.*.*`
+- `createBrowserClient()` calls with credentials
+
+### 3. HTML Processing
+
+For HTML pages:
+1. Extracts and analyzes inline `<script>` tags
+2. Fetches and analyzes external scripts referenced in `src` attributes
+3. Stops at the first script containing credentials
+
+### 4. Proximity Matching
+
+When multiple URLs and keys are found, pairs them based on proximity in the source code (closest matches are prioritized).
+
+## Usage Example
+
+```typescript
+import { extractFromUrl } from '@supascan/core';
+
+const generator = extractFromUrl('https://example.com');
+
+for await (const event of generator) {
+  switch (event.type) {
+    case 'extraction_started':
+      console.log('Starting extraction...');
+      break;
+      
+    case 'content_fetched':
+      console.log(`Fetched ${event.data.size} bytes`);
+      break;
+      
+    case 'html_detected':
+      console.log(`Found ${event.data.scriptCount} scripts to analyze`);
+      break;
+      
+    case 'script_checking':
+      console.log(`Checking script: ${event.data.scriptUrl}`);
+      break;
+      
+    case 'credentials_found':
+      console.log(`Credentials found in: ${event.data.source}`);
+      break;
+      
+    case 'extraction_completed':
+      console.log('Extraction complete!');
+      console.log('URL:', event.data.credentials.url);
+      console.log('Key:', event.data.credentials.key);
+      break;
+  }
+}
+```
+
+## Getting the Final Result
+
+```typescript
+const generator = extractFromUrl('https://example.com');
+
+let credentials;
+for await (const event of generator) {
+  // Process events during extraction
+}
+
+// After the loop completes, get the final result
+const result = await generator.next();
+if (result.done && result.value.success) {
+  credentials = result.value.value;
+  console.log('URL:', credentials.url);
+  console.log('Key:', credentials.key);
+  console.log('Source:', credentials.source);
+} else if (result.done && !result.value.success) {
+  console.error('Extraction failed:', result.value.error.message);
+}
+```
+
+## Extracting from JavaScript Files
+
+```typescript
+const generator = extractFromUrl('https://example.com/bundle.js');
+
+for await (const event of generator) {
+  if (event.type === 'extraction_completed') {
+    const { url, key } = event.data.credentials;
+    console.log('Found credentials in JavaScript bundle');
+  }
+}
+```
+
+## Error Handling
+
+```typescript
+const generator = extractFromUrl('https://example.com');
+
+try {
+  for await (const event of generator) {
+    // Process events
+  }
+  
+  const result = await generator.next();
+  if (result.done && !result.value.success) {
+    console.error('Error:', result.value.error.message);
+  }
+} catch (error) {
+  console.error('Unexpected error:', error);
+}
+```
+
+## Common Error Cases
+
+- **HTTP errors**: Returns error if URL fetch fails (404, 500, etc.)
+- **No credentials found**: Returns error if no Supabase credentials are detected
+- **Network errors**: Returns error if network request fails
+
+## Security Considerations
+
+<Warning>
+This tool is designed for security testing and analysis. Only use it on:
+- Your own applications
+- Applications you have permission to test
+- Bug bounty programs where this activity is authorized
+</Warning>
+
+## Related
+
+- [ExtractedCredentials Type](/api/types/extractor-events)
+- [analyze() Function](/api/analyzer)

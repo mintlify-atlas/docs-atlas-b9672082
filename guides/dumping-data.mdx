@@ -1,0 +1,384 @@
+---
+title: "Dumping Data"
+description: "Extract table data and schemas from Supabase databases for security analysis"
+---
+
+## Overview
+
+The `--dump` flag allows you to extract actual data from exposed tables or retrieve schema information in Swagger/OpenAPI format. This is useful for understanding exactly what data is publicly accessible.
+
+<Warning>
+Only use data dumping on databases you own or have explicit permission to test. Unauthorized data extraction may violate laws and terms of service.
+</Warning>
+
+## Dumping Table Data
+
+Extract rows from a specific table:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... --dump public.users
+```
+
+The basic syntax is:
+
+```bash
+supascan --dump <schema>.<table>
+```
+
+<Steps>
+  <Step title="Identify the table">
+    First, run a scan to discover available tables:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG...
+    ```
+    
+    Look for tables marked `[+]` (exposed).
+  </Step>
+  
+  <Step title="Dump the table">
+    Use the fully qualified table name:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --dump public.users
+    ```
+  </Step>
+  
+  <Step title="Review the output">
+    By default, SupaScan displays results as a formatted table in the terminal.
+  </Step>
+</Steps>
+
+## Limiting Results
+
+Control how many rows to retrieve using `--limit`:
+
+```bash
+supascan --dump public.users --limit 100 --url https://xyz.supabase.co --key eyJhbG...
+```
+
+<Info>
+The default limit is 10 rows. Always set an appropriate limit to avoid overwhelming output.
+</Info>
+
+### Examples with Different Limits
+
+<CodeGroup>
+```bash Quick preview (10 rows)
+supascan --dump public.users --url $URL --key $KEY
+```
+
+```bash Sample analysis (100 rows)
+supascan --dump public.users --limit 100 --url $URL --key $KEY
+```
+
+```bash Large export (1000 rows)
+supascan --dump public.users --limit 1000 --url $URL --key $KEY
+```
+</CodeGroup>
+
+## Output Formats
+
+### Console Table (Default)
+
+Human-readable table output:
+
+```bash
+supascan --dump public.users --limit 5 --url $URL --key $KEY
+```
+
+```text
+Table: public.users (1420 total rows, showing 5)
+
+┌─────┬──────────┬─────────────────────┬────────────────┐
+│ id  │ username │ email               │ created_at     │
+├─────┼──────────┼─────────────────────┼────────────────┤
+│ 1   │ alice    │ alice@example.com   │ 2024-01-15     │
+│ 2   │ bob      │ bob@example.com     │ 2024-01-16     │
+│ 3   │ charlie  │ charlie@example.com │ 2024-01-17     │
+│ 4   │ diana    │ diana@example.com   │ 2024-01-18     │
+│ 5   │ evan     │ evan@example.com    │ 2024-01-19     │
+└─────┴──────────┴─────────────────────┴────────────────┘
+```
+
+### JSON Output
+
+Machine-readable JSON format:
+
+```bash
+supascan --dump public.users --limit 5 --json --url $URL --key $KEY
+```
+
+```json
+{
+  "count": 1420,
+  "rows": [
+    {
+      "id": 1,
+      "username": "alice",
+      "email": "alice@example.com",
+      "created_at": "2024-01-15T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "username": "bob",
+      "email": "bob@example.com",
+      "created_at": "2024-01-16T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+Save to a file:
+
+```bash
+supascan --dump public.users --limit 100 --json --url $URL --key $KEY > users.json
+```
+
+## Dumping Schema Information
+
+Extract Swagger/OpenAPI schema documentation for an entire schema:
+
+```bash
+supascan --dump public --url $URL --key $KEY
+```
+
+<Info>
+When you provide just the schema name (without a table), SupaScan returns the Swagger JSON instead of table data.
+</Info>
+
+This returns the complete OpenAPI specification including:
+
+- Table definitions
+- Column types and constraints
+- Relationship information
+- RPC function signatures
+- Available operations
+
+### Schema Dump Output
+
+```json
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "PostgREST API",
+    "version": "11.2.0",
+    "description": "standard public schema"
+  },
+  "paths": {
+    "/users": {
+      "get": {
+        "summary": "users",
+        "parameters": [...],
+        "responses": {...}
+      }
+    }
+  },
+  "definitions": {...}
+}
+```
+
+## Using with Credential Extraction
+
+Combine `--extract` with `--dump` for automatic scanning and data extraction:
+
+```bash
+supascan -x https://example.com --dump public.users --limit 50
+```
+
+This:
+1. Extracts credentials from the website
+2. Runs a security scan
+3. Dumps data from the specified table
+
+## Practical Use Cases
+
+<AccordionGroup>
+  <Accordion title="Verifying exposed data" icon="magnifying-glass">
+    Check what information is actually visible:
+    
+    ```bash
+    # Quick check
+    supascan --dump public.users --limit 3 --url $URL --key $KEY
+    ```
+    
+    Review the output for sensitive information like:
+    - Email addresses
+    - Phone numbers
+    - Personal information
+    - API keys or tokens
+  </Accordion>
+  
+  <Accordion title="Security audits" icon="shield">
+    Document what data is exposed:
+    
+    ```bash
+    # Export for audit report
+    supascan --dump public.users --limit 100 --json --url $URL --key $KEY > audit-users.json
+    supascan --dump public.posts --limit 100 --json --url $URL --key $KEY > audit-posts.json
+    ```
+  </Accordion>
+  
+  <Accordion title="Testing RLS policies" icon="lock">
+    Verify that RLS policies work correctly:
+    
+    ```bash
+    # Test with anon key
+    supascan --dump public.private_data --url $URL --key $ANON_KEY
+    
+    # Test with authenticated key
+    supascan --dump public.private_data --url $URL --key $AUTH_KEY
+    ```
+    
+    Compare results to ensure policies are enforced.
+  </Accordion>
+  
+  <Accordion title="API documentation" icon="book">
+    Generate schema documentation:
+    
+    ```bash
+    supascan --dump public --url $URL --key $KEY > public-schema.json
+    ```
+    
+    Use the Swagger output for API documentation or client generation.
+  </Accordion>
+</AccordionGroup>
+
+## Understanding Row Counts
+
+SupaScan shows two numbers:
+
+- **Total rows**: Estimated total rows in the table
+- **Showing**: Actual rows returned (limited by `--limit`)
+
+```text
+Table: public.users (1420 total rows, showing 10)
+```
+
+The total is an estimate because:
+- PostgreSQL uses statistics for counts
+- Exact counts are expensive on large tables
+- RLS policies may affect visibility
+
+## Error Handling
+
+<AccordionGroup>
+  <Accordion title="Access denied">
+    ```text
+    Error: Failed to dump table: 42501 (insufficient_privilege)
+    ```
+    
+    This means:
+    - The table exists but the anon key cannot access it
+    - RLS policies are blocking access (good!)
+    - The table is properly secured
+  </Accordion>
+  
+  <Accordion title="Table not found">
+    ```text
+    Error: Failed to dump table: 42P01 (undefined_table)
+    ```
+    
+    Check:
+    - Table name spelling
+    - Schema name (use `schema.table` format)
+    - Table visibility to the anon key
+  </Accordion>
+  
+  <Accordion title="Invalid limit value">
+    ```text
+    Error: Invalid limit value
+    ```
+    
+    Ensure:
+    - Limit is a positive integer
+    - No negative or zero values
+    - No non-numeric characters
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Start small" icon="flask">
+    Always use a small limit first to preview data structure and content.
+  </Card>
+  
+  <Card title="Save as JSON" icon="file-code">
+    Use `--json` output for further processing, reporting, or archival.
+  </Card>
+  
+  <Card title="Document findings" icon="clipboard-list">
+    Record what data is exposed and prioritize fixes based on sensitivity.
+  </Card>
+  
+  <Card title="Respect privacy" icon="user-shield">
+    Handle dumped data securely and delete when no longer needed.
+  </Card>
+</CardGroup>
+
+## Advanced Examples
+
+### Automated Security Check
+
+Script to check multiple tables:
+
+```bash
+#!/bin/bash
+URL="https://xyz.supabase.co"
+KEY="eyJhbG..."
+
+TABLES=("users" "posts" "comments" "sessions")
+
+for table in "${TABLES[@]}"; do
+  echo "Checking $table..."
+  supascan --dump "public.$table" --limit 5 --url $URL --key $KEY
+  echo "---"
+done
+```
+
+### Export All Schemas
+
+Get complete schema documentation:
+
+```bash
+# Get schema list from initial scan
+supascan --url $URL --key $KEY --json > analysis.json
+
+# Dump each schema
+supascan --dump public --url $URL --key $KEY > public-schema.json
+supascan --dump auth --url $URL --key $KEY > auth-schema.json
+```
+
+### Compare Anon vs Authenticated Access
+
+```bash
+# Test with anonymous key
+supascan --dump public.users --url $URL --key $ANON_KEY --json > anon-access.json
+
+# Test with authenticated key
+supascan --dump public.users --url $URL --key $AUTH_KEY --json > auth-access.json
+
+# Compare with jq or diff
+diff <(jq -S . anon-access.json) <(jq -S . auth-access.json)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Testing RPCs" icon="function" href="/guides/testing-rpcs">
+    Learn how to call and test RPC functions for data leaks.
+  </Card>
+  
+  <Card title="JSON Output" icon="code" href="/advanced/json-output">
+    Master JSON output for automation and integration.
+  </Card>
+  
+  <Card title="RLS Testing" icon="shield-check" href="/concepts/rls-testing">
+    Understand how to verify Row Level Security policies.
+  </Card>
+  
+  <Card title="Custom Headers" icon="gear" href="/advanced/custom-headers">
+    Add authentication headers for authenticated scans.
+  </Card>
+</CardGroup>

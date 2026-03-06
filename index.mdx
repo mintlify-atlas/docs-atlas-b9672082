@@ -1,97 +1,139 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "SupaScan Documentation"
+description: "Automated security scanner for Supabase databases - detect exposed data, analyze RLS policies, and test RPC functions"
 ---
 
-## Setting up
-
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+<div className="bg-gradient-to-br from-[#020627] to-[#11161e] rounded-xl p-8 mb-8">
+  <h1 className="text-5xl font-bold text-white mb-4">
+    Security Scanner for Supabase
+  </h1>
+  <p className="text-xl text-gray-300 mb-6">
+    Point SupaScan at any site using Supabase and it extracts credentials, discovers schemas, tests RLS policies, and dumps exposed data.
+  </p>
+  <CardGroup cols={2}>
     <Card
-    title="Set up navigation"
+      title="Get Started"
+      icon="rocket"
+      href="/quickstart"
+    >
+      Install and run your first security scan in minutes
+    </Card>
+    <Card
+      title="View on GitHub"
+      icon="github"
+      href="https://github.com/abhishekg999/supascan"
+    >
+      Star us on GitHub and contribute to the project
+    </Card>
+  </CardGroup>
+</div>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card
+    title="Credential Extraction"
+    icon="key"
+    href="/concepts/credential-extraction"
+  >
+    Automatically extract Supabase credentials from website HTML and JavaScript bundles
+  </Card>
+  <Card
+    title="Schema Discovery"
+    icon="database"
+    href="/concepts/schema-discovery"
+  >
+    Enumerate database schemas, tables, and RPC functions with detailed access testing
+  </Card>
+  <Card
+    title="RLS Testing"
+    icon="shield-halved"
+    href="/concepts/rls-testing"
+  >
+    Test Row-Level Security policies to identify exposed data and misconfigurations
+  </Card>
+  <Card
+    title="Interactive Reports"
+    icon="chart-line"
+    href="/guides/html-reports"
+  >
+    Generate interactive HTML reports with schema browsers and live query interfaces
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+<Steps>
+  <Step title="Install SupaScan">
+    Install globally via npm or bun:
+    
+    <CodeGroup>
+    ```bash npm
+    npm install -g supascan
+    ```
+    
+    ```bash bun
+    bun install -g supascan
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Scan a Website">
+    Point SupaScan at any website to automatically extract Supabase credentials and analyze the database:
+    
+    ```bash
+    supascan -x https://example.com --html
+    ```
+  </Step>
+  
+  <Step title="View Results">
+    SupaScan opens an interactive HTML report showing exposed tables, RPC functions, and security findings.
+  </Step>
+</Steps>
+
+## Documentation Sections
+
+<CardGroup cols={3}>
+  <Card
+    title="Core Concepts"
+    icon="book"
+    href="/concepts/credential-extraction"
+  >
+    Learn how SupaScan works under the hood
+  </Card>
+  <Card
+    title="Guides"
     icon="map"
-    href="/essentials/navigation"
+    href="/guides/scanning-websites"
   >
-    Organize your docs to help users find what they need and succeed with your product.
+    Step-by-step tutorials for common workflows
   </Card>
   <Card
-    title="API documentation"
+    title="CLI Reference"
     icon="terminal"
-    href="/api-reference/introduction"
+    href="/cli/analyze"
   >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+    Complete command-line interface documentation
   </Card>
   <Card
-    title="Code samples"
+    title="API Reference"
     icon="code"
-    href="/essentials/code"
+    href="/api/overview"
   >
-    Add sample code to demonstrate how to use your product.
+    Integrate SupaScan into your own tools
   </Card>
   <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
+    title="Advanced Usage"
+    icon="gear"
+    href="/advanced/custom-headers"
   >
-    Display images and other media.
+    Custom headers, environment variables, and more
   </Card>
   <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
+    title="Output Formats"
+    icon="file-code"
+    href="/cli/output-formats"
   >
-    Write once and reuse across your docs.
+    Console, JSON, and HTML output options
   </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+</CardGroup>

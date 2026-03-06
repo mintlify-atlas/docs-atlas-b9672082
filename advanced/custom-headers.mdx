@@ -1,0 +1,182 @@
+---
+title: "Custom HTTP Headers"
+description: "Add custom HTTP headers to SupaScan requests for authentication and API access"
+---
+
+## Overview
+
+SupaScan supports custom HTTP headers via the `-H` or `--header` flag. This is useful for:
+
+- Adding authentication headers for protected APIs
+- Setting custom user agents for specific testing scenarios
+- Including API keys or tokens required by proxies
+- Adding request metadata for logging and tracking
+
+## Basic Usage
+
+Add a single header using the `-H` flag:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... -H "Authorization: Bearer token123"
+```
+
+## Multiple Headers
+
+You can add multiple headers by repeating the `-H` flag:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... \
+  -H "Authorization: Bearer token123" \
+  -H "X-API-Key: abc123" \
+  -H "User-Agent: SupaScan/Security-Audit"
+```
+
+<Info>
+Headers are parsed by splitting at the first colon (`:`). The header name is everything before the colon, and the value is everything after (trimmed of whitespace).
+</Info>
+
+## Header Format
+
+Headers must follow the format: `Header-Name: value`
+
+```bash
+# Valid header formats
+-H "Authorization: Bearer token123"
+-H "X-Custom-Header: some-value"
+-H "Content-Type: application/json"
+
+# Invalid formats (will cause errors)
+-H "Authorization Bearer token123"  # Missing colon
+-H ": value"                        # Empty header name
+```
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Authentication Headers">
+    Add bearer tokens or API keys for authenticated scans:
+    
+    ```bash
+    supascan -x https://app.example.com \
+      -H "Authorization: Bearer your-token-here" \
+      --html
+    ```
+    
+    This is useful when scanning applications behind authentication.
+  </Accordion>
+
+  <Accordion title="Custom User Agent">
+    Set a custom user agent to identify your scans:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... \
+      -H "User-Agent: Security-Audit-Bot/1.0" \
+      --json
+    ```
+  </Accordion>
+
+  <Accordion title="Proxy Headers">
+    Add headers required by corporate proxies or CDNs:
+    
+    ```bash
+    supascan -x https://app.example.com \
+      -H "X-Forwarded-For: 192.168.1.1" \
+      -H "X-API-Key: proxy-key" \
+      --html
+    ```
+  </Accordion>
+
+  <Accordion title="Custom Metadata">
+    Include request metadata for logging and tracking:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... \
+      -H "X-Request-ID: audit-2024-001" \
+      -H "X-Team: security" \
+      --json
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Implementation Details
+
+Headers are parsed by the `parseHeaders()` function from `apps/cli/src/utils/args.ts:22-46`:
+
+```typescript apps/cli/src/utils/args.ts
+export const parseHeaders = (headers: string[]): Record<string, string> => {
+  const parsedHeaders: Record<string, string> = {};
+
+  for (const header of headers) {
+    const colonIndex = header.indexOf(":");
+    if (colonIndex === -1) {
+      throw new Error(
+        `Invalid header format: "${header}". Expected format: "Header-Name: value"`,
+      );
+    }
+
+    const name = header.slice(0, colonIndex).trim();
+    const value = header.slice(colonIndex + 1).trim();
+
+    if (!name) {
+      throw new Error(
+        `Invalid header format: "${header}". Header name cannot be empty`,
+      );
+    }
+
+    parsedHeaders[name] = value;
+  }
+
+  return parsedHeaders;
+};
+```
+
+## Security Considerations
+
+<Warning>
+**Never include sensitive tokens in shell history**
+
+Headers containing sensitive information will be saved in your shell history. Consider:
+- Using environment variables: `-H "Authorization: Bearer $TOKEN"`
+- Clearing shell history after sensitive scans
+- Using temporary shell sessions
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Best Practices" icon="shield-check">
+    - Store tokens in environment variables
+    - Use temporary tokens for scans
+    - Clear shell history after use
+    - Avoid logging sensitive headers
+  </Card>
+  <Card title="Common Mistakes" icon="triangle-exclamation">
+    - Including tokens directly in commands
+    - Sharing scan commands with tokens
+    - Committing scripts with hardcoded tokens
+    - Using production tokens for testing
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+SupaScan will error if headers are malformed:
+
+```bash
+# Missing colon
+$ supascan --url https://xyz.supabase.co --key eyJhbG... -H "Authorization Bearer token"
+Error: Invalid header format: "Authorization Bearer token". Expected format: "Header-Name: value"
+
+# Empty header name
+$ supascan --url https://xyz.supabase.co --key eyJhbG... -H ": value"
+Error: Invalid header format: ": value". Header name cannot be empty
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="CLI Options" icon="terminal" href="/cli/options">
+    Complete reference of all CLI options
+  </Card>
+  <Card title="Environment Variables" icon="dollar-sign" href="/advanced/environment-variables">
+    Using environment variables in commands
+  </Card>
+</CardGroup>

@@ -1,0 +1,456 @@
+---
+title: Supabase Client Functions
+description: Low-level functions for interacting with Supabase instances including schema discovery, table enumeration, RPC discovery, and access testing
+---
+
+The Supabase client functions provide granular control over individual operations when analyzing a Supabase instance.
+
+## getSchemas()
+
+Discover all available schemas in a Supabase instance.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function* getSchemas(
+  client: SupabaseClient,
+  nonexistantSchema = "NONEXISTANT_SCHEMA_THAT_SHOULDNT_EXIST",
+): AsyncGenerator<SupabaseEvent, Result<string[]>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="nonexistantSchema" type="string" default="NONEXISTANT_SCHEMA_THAT_SHOULDNT_EXIST">
+  A schema name that shouldn't exist (used internally for schema discovery)
+</ParamField>
+
+### Events
+
+- `schemas_fetch_started`: Emitted when starting to fetch schemas
+- `schemas_discovered`: Emitted when schemas are discovered with `{ schemas: string[] }`
+
+### Example
+
+```typescript
+import { getSchemas } from '@supascan/core';
+
+const generator = getSchemas(client);
+
+for await (const event of generator) {
+  if (event.type === 'schemas_discovered') {
+    console.log('Available schemas:', event.data.schemas);
+  }
+}
+```
+
+---
+
+## getTables()
+
+Get all tables in a specific schema.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function* getTables(
+  client: SupabaseClient,
+  schema: string,
+): AsyncGenerator<SupabaseEvent, Result<string[]>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="schema" type="string" required>
+  The schema name to query (e.g., "public")
+</ParamField>
+
+### Events
+
+- `swagger_fetch_started`: Emitted when fetching Swagger/OpenAPI spec
+- `swagger_fetched`: Emitted when Swagger spec is retrieved
+- `tables_discovered`: Emitted with `{ schema: string, tables: string[] }`
+
+### Example
+
+```typescript
+import { getTables } from '@supascan/core';
+
+const generator = getTables(client, 'public');
+
+for await (const event of generator) {
+  if (event.type === 'tables_discovered') {
+    console.log('Tables:', event.data.tables);
+  }
+}
+```
+
+---
+
+## getRPCs()
+
+Get all Remote Procedure Calls (RPCs/stored functions) in a specific schema.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function* getRPCs(
+  client: SupabaseClient,
+  schema: string,
+): AsyncGenerator<SupabaseEvent, Result<string[]>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="schema" type="string" required>
+  The schema name to query
+</ParamField>
+
+### Events
+
+- `swagger_fetch_started`: Emitted when fetching Swagger/OpenAPI spec
+- `swagger_fetched`: Emitted when Swagger spec is retrieved
+- `rpcs_discovered`: Emitted with `{ schema: string, rpcs: string[] }`
+
+### Example
+
+```typescript
+import { getRPCs } from '@supascan/core';
+
+const generator = getRPCs(client, 'public');
+
+for await (const event of generator) {
+  if (event.type === 'rpcs_discovered') {
+    console.log('RPCs:', event.data.rpcs);
+  }
+}
+```
+
+---
+
+## getRPCsWithParameters()
+
+Get detailed information about RPCs including their parameters.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function getRPCsWithParameters(
+  client: SupabaseClient,
+  schema: string,
+): Promise<Result<RPCFunction[]>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="schema" type="string" required>
+  The schema name to query
+</ParamField>
+
+### Returns
+
+Returns a `Promise<Result<RPCFunction[]>>` where each `RPCFunction` contains:
+- `name`: RPC name
+- `parameters`: Array of parameter definitions
+
+### Example
+
+```typescript
+import { getRPCsWithParameters } from '@supascan/core';
+
+const result = await getRPCsWithParameters(client, 'public');
+
+if (result.success) {
+  result.value.forEach(rpc => {
+    console.log(`RPC: ${rpc.name}`);
+    rpc.parameters.forEach(param => {
+      console.log(`  - ${param.name}: ${param.type}${param.required ? ' (required)' : ''}`);
+    });
+  });
+}
+```
+
+---
+
+## testTablesRead()
+
+Test read access to multiple tables in a schema.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function* testTablesRead(
+  client: SupabaseClient,
+  schema: string,
+  tables: string[],
+): AsyncGenerator<SupabaseEvent, Result<Record<string, TableAccessResult>>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="schema" type="string" required>
+  The schema name
+</ParamField>
+
+<ParamField path="tables" type="string[]" required>
+  Array of table names to test
+</ParamField>
+
+### Events
+
+- `table_access_test_started`: Emitted when starting to test a table
+- `table_access_test_completed`: Emitted when test completes with `{ schema, table, result }`
+
+### Example
+
+```typescript
+import { testTablesRead } from '@supascan/core';
+
+const tables = ['users', 'posts', 'comments'];
+const generator = testTablesRead(client, 'public', tables);
+
+for await (const event of generator) {
+  if (event.type === 'table_access_test_completed') {
+    const { table, result } = event.data;
+    console.log(`${table}: ${result.status}`);
+    if (result.rowCount !== undefined) {
+      console.log(`  Rows: ${result.rowCount}`);
+    }
+  }
+}
+```
+
+---
+
+## testTableRead()
+
+Test read access to a single table.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function* testTableRead(
+  client: SupabaseClient,
+  schema: string,
+  table: string,
+): AsyncGenerator<SupabaseEvent, Result<TableAccessResult>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="schema" type="string" required>
+  The schema name
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  The table name to test
+</ParamField>
+
+### Events
+
+- `table_access_test_started`: Emitted when test starts
+- `table_access_test_completed`: Emitted when test completes
+
+### Example
+
+```typescript
+import { testTableRead } from '@supascan/core';
+
+const generator = testTableRead(client, 'public', 'users');
+
+for await (const event of generator) {
+  if (event.type === 'table_access_test_completed') {
+    const { result } = event.data;
+    console.log('Status:', result.status);
+    console.log('Accessible:', result.accessible);
+    console.log('Has data:', result.hasData);
+    if (result.rowCount) {
+      console.log('Row count:', result.rowCount);
+    }
+  }
+}
+```
+
+---
+
+## callRPC()
+
+Execute a Remote Procedure Call.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function callRPC(
+  client: SupabaseClient,
+  schema: string,
+  rpcName: string,
+  args: Record<string, any> = {},
+  options: {
+    get?: boolean;
+    explain?: boolean;
+    limit?: number;
+  } = { get: false, explain: false },
+): Promise<Result<any>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="schema" type="string" required>
+  The schema name
+</ParamField>
+
+<ParamField path="rpcName" type="string" required>
+  The RPC function name
+</ParamField>
+
+<ParamField path="args" type="Record<string, any>" default="{}">
+  Arguments to pass to the RPC
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional configuration
+  
+  <ParamField path="options.get" type="boolean" default="false">
+    Use GET method instead of POST
+  </ParamField>
+  
+  <ParamField path="options.explain" type="boolean" default="false">
+    Return query execution plan
+  </ParamField>
+  
+  <ParamField path="options.limit" type="number">
+    Limit number of results
+  </ParamField>
+</ParamField>
+
+### Example
+
+```typescript
+import { callRPC } from '@supascan/core';
+
+const result = await callRPC(
+  client,
+  'public',
+  'get_user_posts',
+  { user_id: 123 },
+  { limit: 10 }
+);
+
+if (result.success) {
+  console.log('RPC result:', result.value);
+} else {
+  console.error('RPC failed:', result.error.message);
+}
+```
+
+---
+
+## dumpTable()
+
+Dump table data with column information.
+
+### Function Signature
+
+```typescript supabase.ts
+export async function dumpTable(
+  client: SupabaseClient,
+  schema: string,
+  table: string,
+  limit = 10,
+): Promise<Result<{
+  columns: string[];
+  rows: Record<string, unknown>[];
+  count: number;
+}>>
+```
+
+### Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance
+</ParamField>
+
+<ParamField path="schema" type="string" required>
+  The schema name
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  The table name
+</ParamField>
+
+<ParamField path="limit" type="number" default="10">
+  Maximum number of rows to fetch
+</ParamField>
+
+### Example
+
+```typescript
+import { dumpTable } from '@supascan/core';
+
+const result = await dumpTable(client, 'public', 'users', 5);
+
+if (result.success) {
+  console.log('Columns:', result.value.columns);
+  console.log('Total rows:', result.value.count);
+  console.log('Sample data:', result.value.rows);
+}
+```
+
+---
+
+## Events
+
+All async generator functions emit events. Here are the common event types:
+
+### Schema Events
+
+- `schemas_fetch_started`
+- `schemas_discovered`
+
+### Swagger Events
+
+- `swagger_fetch_started`
+- `swagger_fetched`
+
+### Discovery Events
+
+- `tables_discovered`
+- `rpcs_discovered`
+
+### Access Test Events
+
+- `table_access_test_started`
+- `table_access_test_completed`
+
+## Related
+
+- [analyze() Function](/api/analyzer)
+- [Table Access Types](/api/types/table-access)
+- [Supabase Types](/api/types/supabase-types)

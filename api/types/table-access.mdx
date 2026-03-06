@@ -1,0 +1,370 @@
+---
+title: Table Access Types
+description: TypeScript type definitions for table access testing, RPC functions, and Supabase operations
+---
+
+Types related to table access testing and database operations.
+
+## TableAccessResult
+
+Result of testing read access to a table.
+
+```typescript supabase.types.ts
+export type TableAccessResult = {
+  status: TableAccessStatus;
+  accessible: boolean;
+  hasData: boolean;
+  rowCount?: number;
+};
+```
+
+### Fields
+
+<ResponseField name="status" type="TableAccessStatus" required>
+  Access status: `"denied"`, `"readable"`, or `"empty"`. See [TableAccessStatus](#tableaccessstatus).
+</ResponseField>
+
+<ResponseField name="accessible" type="boolean" required>
+  Whether the table can be accessed (read permission granted)
+</ResponseField>
+
+<ResponseField name="hasData" type="boolean" required>
+  Whether the table contains any rows
+</ResponseField>
+
+<ResponseField name="rowCount" type="number">
+  Estimated number of rows in the table (only present when `accessible` is `true`)
+</ResponseField>
+
+### Example
+
+```typescript
+// Table with read access and data
+const result1: TableAccessResult = {
+  status: 'readable',
+  accessible: true,
+  hasData: true,
+  rowCount: 1250
+};
+
+// Table with no access
+const result2: TableAccessResult = {
+  status: 'denied',
+  accessible: false,
+  hasData: false
+};
+
+// Table with access but no data
+const result3: TableAccessResult = {
+  status: 'empty',
+  accessible: true,
+  hasData: false,
+  rowCount: 0
+};
+```
+
+---
+
+## TableAccessStatus
+
+Possible access status values for a table.
+
+```typescript supabase.types.ts
+export type TableAccessStatus = "denied" | "readable" | "empty";
+```
+
+### Values
+
+<ResponseField name="denied" type="string">
+  Table cannot be accessed (read permission denied)
+</ResponseField>
+
+<ResponseField name="readable" type="string">
+  Table can be accessed and contains data
+</ResponseField>
+
+<ResponseField name="empty" type="string">
+  Table can be accessed but contains no rows
+</ResponseField>
+
+---
+
+## RPCFunction
+
+Detailed information about a Remote Procedure Call function.
+
+```typescript supabase.types.ts
+export type RPCFunction = {
+  name: string;
+  parameters: RPCParameter[];
+};
+```
+
+### Fields
+
+<ResponseField name="name" type="string" required>
+  The RPC function name (e.g., `"rpc/get_user_posts"`)
+</ResponseField>
+
+<ResponseField name="parameters" type="RPCParameter[]" required>
+  Array of parameter definitions. See [RPCParameter](#rpcparameter).
+</ResponseField>
+
+### Example
+
+```typescript
+const rpcFunction: RPCFunction = {
+  name: 'rpc/get_user_posts',
+  parameters: [
+    {
+      name: 'user_id',
+      type: 'integer',
+      required: true,
+      description: 'The ID of the user'
+    },
+    {
+      name: 'limit',
+      type: 'integer',
+      required: false,
+      description: 'Maximum number of posts to return'
+    }
+  ]
+};
+```
+
+---
+
+## RPCParameter
+
+Definition of a single RPC function parameter.
+
+```typescript supabase.types.ts
+export type RPCParameter = {
+  name: string;
+  type: string;
+  format?: string;
+  required: boolean;
+  description?: string;
+};
+```
+
+### Fields
+
+<ResponseField name="name" type="string" required>
+  Parameter name
+</ResponseField>
+
+<ResponseField name="type" type="string" required>
+  Parameter data type (e.g., `"integer"`, `"string"`, `"boolean"`)
+</ResponseField>
+
+<ResponseField name="format" type="string">
+  Optional format specification (e.g., `"int64"`, `"uuid"`)
+</ResponseField>
+
+<ResponseField name="required" type="boolean" required>
+  Whether this parameter is required
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Optional description of the parameter
+</ResponseField>
+
+### Example
+
+```typescript
+const parameter: RPCParameter = {
+  name: 'user_id',
+  type: 'integer',
+  format: 'int64',
+  required: true,
+  description: 'Unique identifier for the user'
+};
+```
+
+---
+
+## SupabaseSwagger
+
+The Swagger/OpenAPI specification returned by Supabase.
+
+```typescript supabase.types.ts
+export type SupabaseSwagger = {
+  swagger: string;
+  paths: Record<string, unknown>;
+  info?: {
+    title?: string;
+    description?: string;
+    version?: string;
+  };
+  [key: string]: unknown;
+};
+```
+
+### Fields
+
+<ResponseField name="swagger" type="string" required>
+  Swagger version (e.g., `"2.0"`)
+</ResponseField>
+
+<ResponseField name="paths" type="Record<string, unknown>" required>
+  API paths/endpoints definition
+</ResponseField>
+
+<ResponseField name="info" type="object">
+  Optional API metadata
+  
+  <ResponseField name="info.title" type="string">
+    API title
+  </ResponseField>
+  
+  <ResponseField name="info.description" type="string">
+    API description
+  </ResponseField>
+  
+  <ResponseField name="info.version" type="string">
+    API version
+  </ResponseField>
+</ResponseField>
+
+---
+
+## SupabaseEvent
+
+Union type of all events emitted by Supabase operations.
+
+```typescript supabase.types.ts
+export type SupabaseEvent =
+  | SchemasFetchStartedEvent
+  | SchemasDiscoveredEvent
+  | SwaggerFetchStartedEvent
+  | SwaggerFetchedEvent
+  | TablesDiscoveredEvent
+  | RPCsDiscoveredEvent
+  | TableAccessTestStartedEvent
+  | TableAccessTestCompletedEvent;
+```
+
+See [Supabase Client](/api/supabase-client) for detailed documentation of each event type.
+
+---
+
+## Common Event Types
+
+### SchemasFetchStartedEvent
+
+```typescript
+interface SchemasFetchStartedEvent {
+  type: "schemas_fetch_started";
+  data: {};
+}
+```
+
+### SchemasDiscoveredEvent
+
+```typescript
+interface SchemasDiscoveredEvent {
+  type: "schemas_discovered";
+  data: { schemas: string[] };
+}
+```
+
+### TablesDiscoveredEvent
+
+```typescript
+interface TablesDiscoveredEvent {
+  type: "tables_discovered";
+  data: { schema: string; tables: string[] };
+}
+```
+
+### TableAccessTestCompletedEvent
+
+```typescript
+interface TableAccessTestCompletedEvent {
+  type: "table_access_test_completed";
+  data: {
+    schema: string;
+    table: string;
+    result: TableAccessResult;
+  };
+}
+```
+
+---
+
+## Usage Examples
+
+### Testing Table Access
+
+```typescript
+import { testTableRead } from '@supascan/core';
+import type { TableAccessResult } from '@supascan/core';
+
+const generator = testTableRead(client, 'public', 'users');
+
+for await (const event of generator) {
+  if (event.type === 'table_access_test_completed') {
+    const result: TableAccessResult = event.data.result;
+    
+    if (result.status === 'readable') {
+      console.log(`Table has ${result.rowCount} rows`);
+    } else if (result.status === 'denied') {
+      console.log('Access denied');
+    } else if (result.status === 'empty') {
+      console.log('Table is empty');
+    }
+  }
+}
+```
+
+### Working with RPC Functions
+
+```typescript
+import { getRPCsWithParameters, callRPC } from '@supascan/core';
+import type { RPCFunction } from '@supascan/core';
+
+const result = await getRPCsWithParameters(client, 'public');
+
+if (result.success) {
+  const rpcs: RPCFunction[] = result.value;
+  
+  rpcs.forEach(rpc => {
+    console.log(`RPC: ${rpc.name}`);
+    console.log('Parameters:');
+    rpc.parameters.forEach(param => {
+      const req = param.required ? '(required)' : '(optional)';
+      console.log(`  - ${param.name}: ${param.type} ${req}`);
+    });
+  });
+}
+```
+
+### Handling Multiple Table Tests
+
+```typescript
+import { testTablesRead } from '@supascan/core';
+
+const tables = ['users', 'posts', 'comments'];
+const generator = testTablesRead(client, 'public', tables);
+
+for await (const event of generator) {
+  if (event.type === 'table_access_test_completed') {
+    const { table, result } = event.data;
+    
+    console.log(`${table}:`);
+    console.log(`  Status: ${result.status}`);
+    console.log(`  Accessible: ${result.accessible}`);
+    
+    if (result.rowCount !== undefined) {
+      console.log(`  Rows: ${result.rowCount}`);
+    }
+  }
+}
+```
+
+## Related
+
+- [Supabase Client Functions](/api/supabase-client)
+- [AnalysisResult Types](/api/types/analysis-result)
+- [analyze() Function](/api/analyzer)

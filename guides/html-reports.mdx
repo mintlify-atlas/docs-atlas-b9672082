@@ -1,0 +1,408 @@
+---
+title: "HTML Reports"
+description: "Generate and navigate interactive HTML security reports for in-depth analysis"
+---
+
+## Overview
+
+The `--html` flag generates an interactive web-based report that opens in your browser. This provides a rich interface for exploring database schemas, querying tables, testing RPC functions, and analyzing security findings.
+
+<Info>
+HTML reports are perfect for sharing findings with your team or conducting deep security analysis.
+</Info>
+
+## Generating HTML Reports
+
+Add the `--html` flag to any SupaScan command:
+
+```bash
+supascan -x https://example.com --html
+```
+
+or with manual credentials:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... --html
+```
+
+<Steps>
+  <Step title="Run the command">
+    Execute SupaScan with the `--html` flag:
+    
+    ```bash
+    supascan -x https://example.com --html
+    ```
+  </Step>
+  
+  <Step title="Report generation">
+    SupaScan creates a temporary HTML file with embedded credentials and analysis results.
+  </Step>
+  
+  <Step title="Browser opens automatically">
+    Your default browser opens with the interactive report.
+    
+    The report URL will be something like:
+    ```
+    file:///tmp/supascan-report-abc123.html
+    ```
+  </Step>
+  
+  <Step title="Explore the report">
+    Use the interactive interface to browse schemas, query tables, and test RPCs.
+  </Step>
+</Steps>
+
+## Report Features
+
+The HTML report provides several interactive tools:
+
+### 1. Schema Browser
+
+Navigate through discovered database schemas:
+
+- **Schema list** - All discovered schemas (public, auth, etc.)
+- **Table browser** - Tables within each schema
+- **Access indicators** - Visual badges showing table accessibility
+  - 🟢 Green: Readable (data exposed)
+  - 🟡 Yellow: Empty or protected by RLS
+  - 🔴 Red: Access denied
+- **Column details** - Data types and constraints for each table
+
+### 2. Table Explorer
+
+Interactively query and browse table data:
+
+#### Pagination
+
+- Navigate through results page by page
+- Configurable page size (10, 25, 50, 100 rows)
+- Jump to specific pages
+- Total row count display
+
+#### Filtering
+
+- Filter columns by value
+- Text search across visible columns
+- Clear filters button
+
+#### Sorting
+
+- Click column headers to sort
+- Ascending/descending toggle
+- Multi-column sorting support
+
+#### Data Grid
+
+- Resizable columns
+- Scrollable for large datasets
+- Formatted data display (dates, JSON, etc.)
+- Copy cell values
+
+### 3. RPC Tester
+
+Interactive interface for testing RPC functions:
+
+#### Function Selection
+
+- Dropdown of all available RPC functions
+- Parameter form generation based on function signature
+- Parameter type hints (string, integer, boolean, etc.)
+- Required vs optional parameter indicators
+
+#### Parameter Input
+
+- Auto-generated form fields for each parameter
+- Type-specific inputs (text, number, checkbox, etc.)
+- JSON editor for complex parameters
+- Parameter validation
+
+#### Execution
+
+- "Call Function" button
+- Loading indicator during execution
+- Error display for failed calls
+- Success notification
+
+#### Results Display
+
+- Formatted result table
+- JSON view toggle
+- Export results button
+- Execution time display
+
+### 4. Live Query Interface
+
+Write and execute custom SQL queries against the database:
+
+<Warning>
+The query interface respects RLS policies and the permissions of the provided anon key.
+</Warning>
+
+- SQL editor with syntax highlighting
+- Query history
+- Results in table or JSON format
+- Export query results
+- Saved queries
+
+### 5. Target Configuration
+
+View and modify connection details:
+
+- Supabase URL display
+- Anon key display (masked/unmasked toggle)
+- Custom headers configuration
+- Test connection button
+- Reconfigure credentials
+
+## Report Storage
+
+HTML reports are saved to temporary files:
+
+```text
+/tmp/supascan-report-{random-id}.html
+```
+
+To save to a specific location:
+
+```bash
+# Generate report (opens in browser)
+supascan -x https://example.com --html
+
+# The file path is displayed:
+# HTML report generated: /tmp/supascan-report-abc123.html
+
+# Copy to your desired location
+cp /tmp/supascan-report-abc123.html ./security-audit.html
+```
+
+<Tip>
+You can open the saved HTML file anytime - it's completely self-contained with no external dependencies.
+</Tip>
+
+## Sharing Reports
+
+HTML reports are self-contained single files:
+
+```bash
+# Generate the report
+supascan -x https://example.com --html
+
+# Copy the temporary file
+cp /tmp/supascan-report-*.html ./report-2024-03-06.html
+
+# Share via email, Slack, etc.
+```
+
+<Warning>
+**Security Notice**: HTML reports contain embedded credentials (Supabase URL and anon key). Only share with trusted team members and through secure channels.
+</Warning>
+
+### Redacting Sensitive Information
+
+Before sharing, consider:
+
+1. **Remove embedded credentials** - Edit the HTML and remove the `window.__SUPASCAN_CONFIG__` script
+2. **Export findings only** - Take screenshots or export data tables instead
+3. **Use JSON output** - Generate JSON reports instead for programmatic sanitization
+
+## Report Navigation
+
+The report interface uses a tabbed layout:
+
+### Tab Bar
+
+- **Overview** - Summary of findings and statistics
+- **Schemas** - Schema browser and table explorer
+- **Tables** - Detailed table data viewer
+- **RPCs** - RPC function tester
+- **Query** - Custom SQL query interface
+- **Config** - Connection configuration
+
+### Sidebar
+
+- Schema selector
+- Quick navigation to tables
+- Access status indicators
+- Search/filter schemas and tables
+
+## Interactive Examples
+
+<AccordionGroup>
+  <Accordion title="Exploring exposed tables" icon="table">
+    1. Open the report in your browser
+    2. Click the **Schemas** tab
+    3. Select a schema from the sidebar (e.g., "public")
+    4. Click on a table marked with 🟢 (readable)
+    5. Browse the data using pagination controls
+    6. Use column filters to find specific records
+    7. Click **Export** to save results as JSON or CSV
+  </Accordion>
+  
+  <Accordion title="Testing an RPC function" icon="function">
+    1. Navigate to the **RPCs** tab
+    2. Select a function from the dropdown (e.g., "search_users")
+    3. Fill in the parameter form:
+       - `query`: "admin"
+       - `limit`: 10
+    4. Click **Call Function**
+    5. Review results in the table below
+    6. Check for sensitive data exposure
+    7. Try different parameters to test edge cases
+  </Accordion>
+  
+  <Accordion title="Running custom queries" icon="code">
+    1. Go to the **Query** tab
+    2. Enter a SELECT query in the editor:
+       ```sql
+       SELECT id, username, email FROM users LIMIT 5;
+       ```
+    3. Click **Execute Query**
+    4. View results in table format
+    5. Toggle to JSON view if needed
+    6. Save useful queries to history
+  </Accordion>
+  
+  <Accordion title="Analyzing table relationships" icon="diagram-project">
+    1. Open the **Schemas** tab
+    2. Select a table (e.g., "posts")
+    3. View the column list for foreign keys
+    4. Click on a related table name to navigate
+    5. Use the query tab to test JOIN queries
+    6. Verify that relationships respect RLS policies
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Report Features
+
+### Auto-run Mode
+
+Reports automatically run the initial analysis when opened:
+
+```bash
+supascan -x https://example.com --html
+```
+
+The report:
+1. Loads in the browser
+2. Automatically connects to Supabase
+3. Runs the security analysis
+4. Populates all tabs with results
+
+### Manual Configuration
+
+You can reconfigure the target after opening:
+
+1. Click the **Config** tab
+2. Update the Supabase URL
+3. Update the anon key
+4. Add custom headers if needed
+5. Click **Save and Reconnect**
+6. Analysis runs with new credentials
+
+### Export Options
+
+Export data from various sections:
+
+- **Table data** - Export as JSON or CSV
+- **Query results** - Download result sets
+- **RPC results** - Save function outputs
+- **Full analysis** - Export complete findings as JSON
+
+## Performance Considerations
+
+HTML reports run directly in your browser:
+
+- Analysis happens client-side using JavaScript
+- All queries go directly to Supabase (no proxy)
+- Large result sets may slow down the browser
+- Use pagination and limits for large tables
+
+<Tip>
+For very large databases, use specific schema filtering: `--schema public`
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Report doesn't open automatically">
+    Check the terminal output for the file path:
+    
+    ```text
+    HTML report generated: /tmp/supascan-report-abc123.html
+    ```
+    
+    Manually open the file:
+    - **macOS**: `open /tmp/supascan-report-abc123.html`
+    - **Linux**: `xdg-open /tmp/supascan-report-abc123.html`
+    - **Windows**: `start /tmp/supascan-report-abc123.html`
+  </Accordion>
+  
+  <Accordion title="Credentials not working in report">
+    The embedded credentials might be incorrect:
+    
+    1. Open browser developer tools (F12)
+    2. Check the console for errors
+    3. Go to the **Config** tab in the report
+    4. Verify the URL and key are correct
+    5. Test the connection
+  </Accordion>
+  
+  <Accordion title="Tables show as empty but shouldn't be">
+    This could indicate:
+    
+    - RLS policies blocking access (expected)
+    - Network/CORS issues
+    - Incorrect permissions
+    
+    Check browser console for error messages.
+  </Accordion>
+  
+  <Accordion title="Report is very slow">
+    Large databases can cause performance issues:
+    
+    - Use schema filtering: `--schema public`
+    - Reduce page sizes in table explorer
+    - Limit RPC result counts
+    - Close other browser tabs
+  </Accordion>
+</AccordionGroup>
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Secure storage" icon="vault">
+    Store reports in encrypted locations and delete when no longer needed.
+  </Card>
+  
+  <Card title="Controlled sharing" icon="user-lock">
+    Only share reports through secure channels with authorized personnel.
+  </Card>
+  
+  <Card title="Credential rotation" icon="rotate">
+    After sharing reports, consider rotating the anon key if concerned.
+  </Card>
+  
+  <Card title="Redact before sharing" icon="eraser">
+    Remove sensitive findings or credentials before distributing widely.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JSON Output" icon="code" href="/advanced/json-output">
+    Learn how to generate machine-readable JSON reports instead.
+  </Card>
+  
+  <Card title="Analyzing Databases" icon="database" href="/guides/analyzing-databases">
+    Understand how to interpret the findings in HTML reports.
+  </Card>
+  
+  <Card title="Custom Headers" icon="gear" href="/advanced/custom-headers">
+    Add authentication headers for authenticated scans.
+  </Card>
+  
+  <Card title="Schema Discovery" icon="sitemap" href="/concepts/schema-discovery">
+    Learn more about how SupaScan discovers database schemas.
+  </Card>
+</CardGroup>

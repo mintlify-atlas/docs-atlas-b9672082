@@ -1,0 +1,144 @@
+---
+title: Installation
+description: Install SupaScan CLI tool via npm or bun to start scanning Supabase databases
+---
+
+## System Requirements
+
+Before installing SupaScan, ensure you have one of the following package managers installed:
+
+- **Node.js** 16.x or higher with npm
+- **Bun** 1.0 or higher
+
+<Info>
+SupaScan is a CLI tool that runs on macOS, Linux, and Windows (via WSL).
+</Info>
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="npm">
+    Install SupaScan globally using npm:
+
+    ```bash
+    npm install -g supascan
+    ```
+
+    This will make the `supascan` command available globally on your system.
+  </Tab>
+  
+  <Tab title="bun">
+    Install SupaScan globally using bun:
+
+    ```bash
+    bun install -g supascan
+    ```
+
+    Bun provides faster installation times compared to npm.
+  </Tab>
+</Tabs>
+
+## Verify Installation
+
+After installation, verify that SupaScan is correctly installed by checking the version:
+
+```bash
+supascan --version
+```
+
+You should see output similar to:
+
+```bash
+4.0.5
+```
+
+## Getting Help
+
+View all available commands and options:
+
+```bash
+supascan --help
+```
+
+This displays the complete CLI reference:
+
+```bash
+Usage: supascan [options]
+
+Security analysis tool for Supabase
+
+Options:
+  -V, --version                     output the version number
+  -u, --url <url>                   Supabase URL
+  -k, --key <key>                   Supabase anon key
+  -s, --schema <schema>             Schema to analyze (default: all schemas)
+  -x, --extract <url>               Extract credentials from JS file URL (experimental)
+  --dump <schema.table|schema>      Dump data from specific table or swagger JSON from schema
+  --limit <number>                  Limit rows for dump or RPC results (default: "10")
+  --rpc <schema.rpc_name>           Call an RPC function (read-only operations only)
+  --args <json>                     JSON arguments for RPC call (use $VAR for environment variables)
+  -H, --header <header>             Add custom HTTP header (can be used multiple times)
+  --json                            Output as JSON
+  --html                            Generate HTML report
+  -d, --debug                       Enable debug mode
+  --explain                         Show query execution plan
+  --suppress-experimental-warnings  Suppress experimental warnings
+  -h, --help                        display help for command
+```
+
+## Updating SupaScan
+
+To update to the latest version:
+
+<CodeGroup>
+```bash npm
+npm update -g supascan
+```
+
+```bash bun
+bun update -g supascan
+```
+</CodeGroup>
+
+## Uninstalling
+
+If you need to uninstall SupaScan:
+
+<CodeGroup>
+```bash npm
+npm uninstall -g supascan
+```
+
+```bash bun
+bun remove -g supascan
+```
+</CodeGroup>
+
+## Troubleshooting
+
+### Command Not Found
+
+If you receive a "command not found" error after installation:
+
+1. Ensure your global package directory is in your PATH
+2. For npm, check: `npm config get prefix`
+3. For bun, check: `bun pm bin -g`
+4. Add the bin directory to your PATH in `~/.bashrc` or `~/.zshrc`
+
+### Permission Errors
+
+If you encounter permission errors during installation on Unix systems:
+
+```bash
+sudo npm install -g supascan
+```
+
+<Warning>
+Using `sudo` is not recommended. Consider configuring npm to install packages globally without sudo by following [npm's guide](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally).
+</Warning>
+
+## Next Steps
+
+<Card title="Quick Start" icon="rocket" href="/quickstart">
+  Run your first security scan and learn the basic workflow
+</Card>

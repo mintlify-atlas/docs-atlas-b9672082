@@ -1,0 +1,266 @@
+---
+title: "Environment Variables"
+description: "Use environment variables in RPC arguments and authentication tokens"
+---
+
+## Overview
+
+SupaScan supports environment variable substitution in RPC arguments using the `$VAR` syntax. This allows you to:
+
+- Keep sensitive data out of shell history
+- Reuse scan configurations across environments
+- Automate scans with dynamic parameters
+- Inject runtime values into RPC calls
+
+## Basic Usage
+
+Use `$VARIABLE_NAME` in your RPC arguments:
+
+```bash
+export USER_ID="abc-123-def"
+
+supascan --url https://xyz.supabase.co --key eyJhbG... \
+  --rpc public.get_user \
+  --args '{"id": "$USER_ID"}'
+```
+
+SupaScan will substitute `$USER_ID` with the value `abc-123-def` before making the RPC call.
+
+## Variable Syntax
+
+Environment variables must:
+- Start with a letter or underscore
+- Contain only uppercase letters, numbers, and underscores
+- Be prefixed with `$`
+
+**Valid variable names:**
+```bash
+$API_KEY
+$USER_ID
+$DATABASE_URL
+$_PRIVATE_TOKEN
+$TEST_123
+```
+
+**Invalid variable names:**
+```bash
+$123_VAR      # Cannot start with number
+$my-var       # Cannot contain hyphens
+$myVar        # Must be uppercase
+```
+
+## Multiple Variables
+
+You can use multiple environment variables in a single RPC call:
+
+```bash
+export USER_ID="user-123"
+export PAGE_SIZE="50"
+export FILTER="active"
+
+supascan --url https://xyz.supabase.co --key eyJhbG... \
+  --rpc public.search_users \
+  --args '{"user_id": "$USER_ID", "limit": $PAGE_SIZE, "status": "$FILTER"}'
+```
+
+<Info>
+String values are automatically quoted, while numeric values are inserted directly.
+</Info>
+
+## Implementation Details
+
+Environment variable substitution is handled by `parseRPCArgs()` from `apps/cli/src/utils/args.ts:1-20`:
+
+```typescript apps/cli/src/utils/args.ts
+export const parseRPCArgs = (argsString: string): Record<string, any> => {
+  try {
+    const processedString = argsString.replace(
+      /\$([A-Z_][A-Z0-9_]*)/g,
+      (match, varName) => {
+        const envValue = process.env[varName];
+        if (envValue === undefined) {
+          throw new Error(`Environment variable ${varName} not found`);
+        }
+        return JSON.stringify(envValue);
+      },
+    );
+
+    return JSON.parse(processedString);
+  } catch (error) {
+    throw new Error(
+      `Failed to parse RPC arguments: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+```
+
+The substitution uses a regex pattern: `/\$([A-Z_][A-Z0-9_]*)/g`
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Dynamic User IDs">
+    Test RPC functions with different user IDs:
+    
+    ```bash
+    export TARGET_USER="user-abc-123"
+    
+    supascan --url https://xyz.supabase.co --key eyJhbG... \
+      --rpc public.get_user_data \
+      --args '{"user_id": "$TARGET_USER"}'
+    ```
+  </Accordion>
+
+  <Accordion title="Pagination Parameters">
+    Set pagination limits from environment:
+    
+    ```bash
+    export PAGE_SIZE="100"
+    export OFFSET="0"
+    
+    supascan --url https://xyz.supabase.co --key eyJhbG... \
+      --rpc public.list_items \
+      --args '{"limit": $PAGE_SIZE, "offset": $OFFSET}'
+    ```
+  </Accordion>
+
+  <Accordion title="Search Queries">
+    Inject search terms from environment:
+    
+    ```bash
+    export SEARCH_TERM="admin"
+    
+    supascan --url https://xyz.supabase.co --key eyJhbG... \
+      --rpc public.search_users \
+      --args '{"query": "$SEARCH_TERM"}'
+    ```
+  </Accordion>
+
+  <Accordion title="Automated Testing">
+    Use in CI/CD pipelines:
+    
+    ```bash
+    # In CI environment
+    export SUPABASE_URL="https://xyz.supabase.co"
+    export SUPABASE_KEY="eyJhbG..."
+    export TEST_USER_ID="test-user-123"
+    
+    supascan --url $SUPABASE_URL --key $SUPABASE_KEY \
+      --rpc public.verify_access \
+      --args '{"user_id": "$TEST_USER_ID"}' \
+      --json > results.json
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Authentication Variables
+
+You can also use environment variables for authentication:
+
+```bash
+export SUPABASE_URL="https://xyz.supabase.co"
+export SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+supascan --url $SUPABASE_URL --key $SUPABASE_KEY --html
+```
+
+<Tip>
+This is the recommended approach for automated scans and CI/CD pipelines. It keeps sensitive credentials out of version control.
+</Tip>
+
+## Error Handling
+
+SupaScan will error if a referenced environment variable is not set:
+
+```bash
+# Variable not set
+$ supascan --url https://xyz.supabase.co --key eyJhbG... \
+    --rpc public.get_user \
+    --args '{"id": "$MISSING_VAR"}'
+Error: Failed to parse RPC arguments: Environment variable MISSING_VAR not found
+```
+
+<Warning>
+**Always verify environment variables are set before running scans**
+
+Use `echo $VAR_NAME` to verify a variable is set, or add checks to your scripts:
+
+```bash
+if [ -z "$USER_ID" ]; then
+  echo "Error: USER_ID not set"
+  exit 1
+fi
+```
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield-halved">
+    - Never commit `.env` files with secrets
+    - Use different tokens for dev/prod
+    - Rotate tokens regularly
+    - Clear variables after use: `unset VAR_NAME`
+  </Card>
+  <Card title="Automation" icon="robot">
+    - Validate all variables are set
+    - Use `.env` files for local development
+    - Store secrets in CI/CD secret managers
+    - Log variable names (not values) for debugging
+  </Card>
+</CardGroup>
+
+## Example: Automated Security Scan
+
+Here's a complete example for a scheduled security scan:
+
+```bash scan.sh
+#!/bin/bash
+set -e
+
+# Load environment from .env file (not committed)
+if [ -f .env ]; then
+  export $(cat .env | xargs)
+fi
+
+# Verify required variables
+required_vars=("SUPABASE_URL" "SUPABASE_KEY" "ALERT_EMAIL")
+for var in "${required_vars[@]}"; do
+  if [ -z "${!var}" ]; then
+    echo "Error: $var not set"
+    exit 1
+  fi
+done
+
+# Run scan
+echo "Starting security scan..."
+supascan --url $SUPABASE_URL --key $SUPABASE_KEY --json > scan-results.json
+
+# Check for exposed tables
+exposed_count=$(jq '[.schemaDetails[].tableAccess[] | select(.status == "readable")] | length' scan-results.json)
+
+if [ "$exposed_count" -gt 0 ]; then
+  echo "WARNING: Found $exposed_count exposed tables!"
+  # Send alert (implementation depends on your setup)
+  echo "Scan found $exposed_count exposed tables" | mail -s "Security Alert" $ALERT_EMAIL
+fi
+
+echo "Scan complete. Results saved to scan-results.json"
+```
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="RPC Testing" icon="function" href="/guides/testing-rpcs">
+    Complete guide to testing RPC functions
+  </Card>
+  <Card title="Custom Headers" icon="header" href="/advanced/custom-headers">
+    Adding custom HTTP headers to requests
+  </Card>
+  <Card title="JSON Output" icon="file-code" href="/advanced/json-output">
+    Working with JSON output for automation
+  </Card>
+  <Card title="CLI Options" icon="terminal" href="/cli/options">
+    All available command-line options
+  </Card>
+</CardGroup>

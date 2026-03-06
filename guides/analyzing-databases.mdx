@@ -1,0 +1,343 @@
+---
+title: "Analyzing Databases"
+description: "Manually analyze Supabase databases and interpret security scan results"
+---
+
+## Overview
+
+SupaScan analyzes Supabase databases to discover schemas, test table access permissions, and identify potential security issues. You can run analysis with manually provided credentials or automatically extracted ones.
+
+## Manual Database Analysis
+
+When you already have Supabase credentials, provide them directly:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+<Steps>
+  <Step title="Gather your credentials">
+    You need two pieces of information:
+    
+    - **Supabase URL**: Your project URL (e.g., `https://xyz.supabase.co`)
+    - **Anon key**: The public/anonymous JWT token
+    
+    Find these in your Supabase project settings under **API**.
+  </Step>
+  
+  <Step title="Run the analysis">
+    Execute the scan command:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG...
+    ```
+  </Step>
+  
+  <Step title="Review the output">
+    SupaScan will display:
+    
+    - Target summary with domain and project info
+    - JWT token details (role, expiration)
+    - Database schemas discovered
+    - Table access results
+    - Available RPC functions
+  </Step>
+</Steps>
+
+## Understanding Analysis Results
+
+SupaScan provides detailed information about database security:
+
+### Target Summary
+
+Basic information about the Supabase instance:
+
+```text
+TARGET SUMMARY
+--------------------
+Domain: xyz.supabase.co
+Project ID: xyz
+Service: Supabase
+```
+
+### JWT Token Information
+
+Details decoded from the anon key:
+
+```text
+JWT TOKEN INFO
+--------------------
+Issuer: https://xyz.supabase.co/auth/v1
+Role: anon
+Expires: 2030-01-01T00:00:00.000Z
+```
+
+<Info>
+The `role` field shows what permissions this token has. Common roles are `anon` (public) and `authenticated`.
+</Info>
+
+### Database Analysis
+
+The core security findings:
+
+```text
+DATABASE ANALYSIS
+--------------------
+Schemas discovered: 2
+
+Schema: public
+
+Tables: 8
+  3 exposed | 2 empty/protected | 3 denied
+```
+
+## Interpreting Table Access Results
+
+SupaScan tests each table and categorizes access:
+
+<AccordionGroup>
+  <Accordion title="[+] Exposed Tables" icon="circle-check">
+    Tables with readable data:
+    
+    ```text
+    [+] users (~1420 rows exposed)
+    [+] posts (~892 rows exposed)
+    ```
+    
+    **What this means:**
+    - The anon key can read data from these tables
+    - Row counts are estimated
+    - This may indicate missing or overly permissive RLS policies
+    
+    **Action items:**
+    - Review RLS policies on these tables
+    - Verify if this data should be publicly accessible
+    - Check for sensitive information in exposed rows
+  </Accordion>
+  
+  <Accordion title="[-] Empty or Protected Tables" icon="circle-minus">
+    Tables that exist but return no rows:
+    
+    ```text
+    [-] sessions (0 rows - empty or RLS)
+    [-] audit_logs (0 rows - empty or RLS)
+    ```
+    
+    **What this means:**
+    - Table exists and is accessible
+    - Either the table is empty OR RLS policies block access
+    - Cannot distinguish between empty and protected
+    
+    **Action items:**
+    - Verify RLS policies are in place
+    - Confirm this is expected behavior
+  </Accordion>
+  
+  <Accordion title="[X] Denied Tables" icon="circle-xmark">
+    Tables where access is completely blocked:
+    
+    ```text
+    [X] admin_users (access denied)
+    [X] secrets (access denied)
+    ```
+    
+    **What this means:**
+    - The anon key cannot access these tables at all
+    - Proper security configuration
+    - These tables are well-protected
+    
+    **No action needed** - this is the desired state for sensitive tables.
+  </Accordion>
+</AccordionGroup>
+
+## RPC Function Discovery
+
+SupaScan enumerates available Remote Procedure Call (RPC) functions:
+
+```text
+RPCs: 2
+  * get_public_stats
+    No parameters
+  * search_users
+    - query: string (required)
+    - limit: integer (optional)
+```
+
+<Warning>
+RPC functions can bypass RLS policies. Review each function to ensure it doesn't leak sensitive data.
+</Warning>
+
+### RPC Parameter Types
+
+- **required** - Must be provided when calling the function
+- **optional** - Can be omitted
+- **type** - Data type (string, integer, boolean, etc.)
+- **format** - Additional type information (e.g., date-time, uuid)
+
+## Analyzing Specific Schemas
+
+Limit analysis to a single schema:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... --schema public
+```
+
+This is useful for:
+- Faster scans on large databases
+- Focusing on specific areas
+- Reducing noise in output
+
+## Output Formats
+
+<Tabs>
+  <Tab title="Console (default)">
+    Human-readable terminal output with colors:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG...
+    ```
+    
+    Best for: Quick manual reviews
+  </Tab>
+  
+  <Tab title="JSON">
+    Machine-readable structured data:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --json
+    ```
+    
+    Best for: Automation, CI/CD pipelines, further processing
+  </Tab>
+  
+  <Tab title="HTML">
+    Interactive web-based report:
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --html
+    ```
+    
+    Best for: Deep analysis, sharing results, visual exploration
+  </Tab>
+</Tabs>
+
+## JSON Output Structure
+
+Save analysis results for programmatic access:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... --json > report.json
+```
+
+The JSON output includes:
+
+```json
+{
+  "schemas": ["public", "auth"],
+  "schemaDetails": {
+    "public": {
+      "tables": ["users", "posts"],
+      "rpcs": ["search_users"],
+      "rpcFunctions": [...],
+      "tableAccess": {
+        "users": {
+          "status": "readable",
+          "rowCount": 1420
+        }
+      }
+    }
+  },
+  "summary": {
+    "domain": "xyz.supabase.co",
+    "jwtInfo": {...},
+    "metadata": {...}
+  }
+}
+```
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Regular scans" icon="clock">
+    Run SupaScan regularly to catch configuration drift and new exposures.
+  </Card>
+  
+  <Card title="Test with different roles" icon="users">
+    Scan with both anon and authenticated keys to verify RLS policies.
+  </Card>
+  
+  <Card title="Document findings" icon="clipboard">
+    Save JSON reports to track security posture over time.
+  </Card>
+  
+  <Card title="Fix exposed tables" icon="wrench">
+    Add or update RLS policies on any unexpectedly exposed tables.
+  </Card>
+</CardGroup>
+
+## Common Security Issues
+
+### Missing RLS Policies
+
+If critical tables show as `[+] exposed`, they likely lack RLS policies:
+
+```sql
+-- Enable RLS on the table
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Create a policy
+CREATE POLICY "Users can only see their own data"
+ON users
+FOR SELECT
+USING (auth.uid() = id);
+```
+
+### Overly Permissive Policies
+
+Some tables may be intentionally public, but verify:
+
+- Is all data in these tables safe to expose?
+- Are there any columns that should be restricted?
+- Should anonymous users really have this access?
+
+### RPC Function Leaks
+
+RPC functions can bypass RLS. Audit each function:
+
+```sql
+-- Bad: This function ignores RLS
+CREATE FUNCTION get_all_users()
+RETURNS SETOF users
+SECURITY DEFINER  -- Runs as function owner!
+AS $$
+  SELECT * FROM users;
+$$;
+
+-- Good: This function respects caller permissions
+CREATE FUNCTION get_public_users()
+RETURNS SETOF users
+SECURITY INVOKER  -- Runs as caller
+AS $$
+  SELECT * FROM users WHERE is_public = true;
+$$;
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dump Data" icon="download" href="/guides/dumping-data">
+    Extract exposed data to understand what's actually visible.
+  </Card>
+  
+  <Card title="Test RPCs" icon="function" href="/guides/testing-rpcs">
+    Call RPC functions to verify they don't leak data.
+  </Card>
+  
+  <Card title="HTML Reports" icon="browser" href="/guides/html-reports">
+    Use interactive reports for deeper analysis.
+  </Card>
+  
+  <Card title="RLS Testing" icon="shield" href="/concepts/rls-testing">
+    Learn more about Row Level Security testing.
+  </Card>
+</CardGroup>

@@ -1,0 +1,368 @@
+---
+title: "CLI Options Reference"
+description: "Complete reference of all command-line options available in SupaScan"
+---
+
+## Overview
+
+This page documents all available command-line options for the SupaScan CLI tool.
+
+## Global Options
+
+These options are available for all commands.
+
+### Authentication
+
+<ParamField path="--url" type="string">
+  Supabase project URL
+  
+  **Example:**
+  ```bash
+  supascan --url https://your-project.supabase.co
+  ```
+</ParamField>
+
+<ParamField path="-u" type="string">
+  Shorthand for `--url`
+</ParamField>
+
+<ParamField path="--key" type="string">
+  Supabase anon key (JWT token)
+  
+  **Example:**
+  ```bash
+  supascan --key eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  ```
+</ParamField>
+
+<ParamField path="-k" type="string">
+  Shorthand for `--key`
+</ParamField>
+
+<ParamField path="--extract" type="string">
+  Extract credentials from JavaScript file URL (experimental)
+  
+  **Example:**
+  ```bash
+  supascan --extract https://yourapp.com
+  ```
+  
+  See [extract](/cli/extract) for details.
+</ParamField>
+
+<ParamField path="-x" type="string">
+  Shorthand for `--extract`
+</ParamField>
+
+### Analysis Options
+
+<ParamField path="--schema" type="string">
+  Schema to analyze (default: all schemas)
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> --schema public
+  ```
+</ParamField>
+
+<ParamField path="-s" type="string">
+  Shorthand for `--schema`
+</ParamField>
+
+### Data Operations
+
+<ParamField path="--dump" type="string">
+  Dump data from specific table or Swagger JSON from schema
+  
+  **Format:** `schema.table` or `schema`
+  
+  **Examples:**
+  ```bash
+  # Dump table data
+  supascan --url <url> --key <key> --dump public.users
+  
+  # Dump schema definition
+  supascan --url <url> --key <key> --dump public
+  ```
+  
+  See [dump](/cli/dump) for details.
+</ParamField>
+
+<ParamField path="--rpc" type="string">
+  Call an RPC function (read-only operations only)
+  
+  **Format:** `schema.rpc_name`
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> --rpc public.get_user_posts
+  ```
+  
+  See [rpc](/cli/rpc) for details.
+</ParamField>
+
+<ParamField path="--args" type="string">
+  JSON arguments for RPC call
+  
+  Supports `$VAR` syntax for environment variables.
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> \
+    --rpc public.get_user_by_id \
+    --args '{"user_id": "550e8400-e29b-41d4-a716-446655440000"}'
+  ```
+  
+  **With environment variables:**
+  ```bash
+  export USER_ID="550e8400-e29b-41d4-a716-446655440000"
+  supascan --url <url> --key <key> \
+    --rpc public.get_user_by_id \
+    --args '{"user_id": $USER_ID}'
+  ```
+</ParamField>
+
+<ParamField path="--limit" type="number" default="10">
+  Limit rows for dump or RPC results
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> --dump public.users --limit 100
+  ```
+</ParamField>
+
+### Output Options
+
+<ParamField path="--json" type="boolean">
+  Output as JSON
+  
+  Formats all output as JSON to stdout. Useful for programmatic access or piping to other tools.
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> --json > analysis.json
+  ```
+  
+  Cannot be used with `--html`.
+</ParamField>
+
+<ParamField path="--html" type="boolean">
+  Generate HTML report
+  
+  Generates an interactive HTML report and opens it in your default browser.
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> --html
+  ```
+  
+  Cannot be used with `--json`.
+</ParamField>
+
+### Network Options
+
+<ParamField path="--header" type="string">
+  Add custom HTTP header (can be used multiple times)
+  
+  **Format:** `Header-Name: value`
+  
+  **Examples:**
+  ```bash
+  # Single header
+  supascan --url <url> --key <key> \
+    --header "X-Custom-Header: value"
+  
+  # Multiple headers
+  supascan --url <url> --key <key> \
+    --header "X-Custom-Header: value" \
+    --header "Authorization: Bearer token"
+  ```
+</ParamField>
+
+<ParamField path="-H" type="string">
+  Shorthand for `--header`
+</ParamField>
+
+### Debugging Options
+
+<ParamField path="--debug" type="boolean">
+  Enable debug mode
+  
+  Shows detailed logging including:
+  - HTTP requests and responses
+  - Credential extraction progress
+  - Internal processing steps
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> --debug
+  ```
+</ParamField>
+
+<ParamField path="-d" type="boolean">
+  Shorthand for `--debug`
+</ParamField>
+
+<ParamField path="--explain" type="boolean">
+  Show query execution plan
+  
+  Only works with `--rpc` flag. Shows PostgreSQL query execution plan instead of results.
+  
+  **Example:**
+  ```bash
+  supascan --url <url> --key <key> \
+    --rpc public.get_user_posts \
+    --args '{"user_id": "550e8400-e29b-41d4-a716-446655440000"}' \
+    --explain
+  ```
+</ParamField>
+
+<ParamField path="--suppress-experimental-warnings" type="boolean">
+  Suppress experimental warnings
+  
+  Hides the warning message when using experimental features like `--extract`.
+  
+  **Example:**
+  ```bash
+  supascan --extract https://yourapp.com --suppress-experimental-warnings
+  ```
+</ParamField>
+
+### Version and Help
+
+<ParamField path="--version" type="boolean">
+  Display version information
+  
+  **Example:**
+  ```bash
+  supascan --version
+  ```
+</ParamField>
+
+<ParamField path="-V" type="boolean">
+  Shorthand for `--version`
+</ParamField>
+
+<ParamField path="--help" type="boolean">
+  Display help information
+  
+  **Example:**
+  ```bash
+  supascan --help
+  ```
+</ParamField>
+
+<ParamField path="-h" type="boolean">
+  Shorthand for `--help`
+</ParamField>
+
+## Command Modes
+
+SupaScan operates in one of three modes based on the flags provided:
+
+### 1. Analyze Mode (Default)
+
+Runs a full security analysis.
+
+**Trigger:** No `--dump` or `--rpc` flag
+
+**Example:**
+```bash
+supascan --url <url> --key <key>
+```
+
+### 2. Dump Mode
+
+Extracts data or schema definitions.
+
+**Trigger:** `--dump` flag present
+
+**Example:**
+```bash
+supascan --url <url> --key <key> --dump public.users
+```
+
+### 3. RPC Mode
+
+Calls an RPC function.
+
+**Trigger:** `--rpc` flag present
+
+**Example:**
+```bash
+supascan --url <url> --key <key> --rpc public.get_user_posts
+```
+
+## Option Combinations
+
+### Valid Combinations
+
+```bash
+# Extract and analyze
+supascan --extract https://yourapp.com
+
+# Analyze with JSON output
+supascan --url <url> --key <key> --json
+
+# Dump with limit
+supascan --url <url> --key <key> --dump public.users --limit 50
+
+# RPC with args and explain
+supascan --url <url> --key <key> \
+  --rpc public.search \
+  --args '{"q": "test"}' \
+  --explain
+
+# Extract with HTML report
+supascan --extract https://yourapp.com --html
+
+# Debug mode with custom headers
+supascan --url <url> --key <key> \
+  --debug \
+  --header "X-Custom: value"
+```
+
+### Invalid Combinations
+
+```bash
+# ERROR: Cannot use --json and --html together
+supascan --url <url> --key <key> --json --html
+
+# ERROR: --args requires --rpc
+supascan --url <url> --key <key> --args '{"test": "value"}'
+
+# ERROR: --explain requires --rpc
+supascan --url <url> --key <key> --explain
+```
+
+## Environment Variables
+
+While SupaScan doesn't directly read environment variables for configuration, you can use shell features:
+
+```bash
+# Store credentials in environment
+export SUPABASE_URL="https://your-project.supabase.co"
+export SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Use in command
+supascan --url "$SUPABASE_URL" --key "$SUPABASE_KEY"
+```
+
+## Exit Codes
+
+- **0**: Success
+- **1**: Error (authentication failure, network error, invalid arguments, etc.)
+
+## Source Code Reference
+
+The CLI options are defined using Commander.js at:
+
+`/home/daytona/workspace/source/apps/cli/src/index.ts:15-48`
+
+## Related Pages
+
+- [analyze](/cli/analyze) - Main analysis command
+- [dump](/cli/dump) - Dump command details
+- [rpc](/cli/rpc) - RPC command details
+- [extract](/cli/extract) - Credential extraction
+- [Output Formats](/cli/output-formats) - Output format documentation

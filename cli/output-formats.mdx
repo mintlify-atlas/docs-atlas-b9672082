@@ -1,0 +1,481 @@
+---
+title: "Output Formats"
+description: "Understanding SupaScan's different output formats: console, JSON, and HTML"
+---
+
+## Overview
+
+SupaScan supports three output formats to suit different use cases:
+
+1. **Console** (default) - Human-readable formatted output
+2. **JSON** - Machine-readable structured data
+3. **HTML** - Interactive web-based report
+
+## Console Output (Default)
+
+The default console output is designed for human readability with colors, formatting, and visual indicators.
+
+### Basic Usage
+
+```bash
+supascan --url <url> --key <key>
+```
+
+### Analyze Command Output
+
+**Structure:**
+
+```
+============================================================
+  SUPABASE DATABASE ANALYSIS
+============================================================
+
+TARGET SUMMARY
+--------------------
+Domain: your-project.supabase.co
+Service: supabase
+Project ID: your-project
+Title: PostgREST API
+Version: 11.2.2
+
+JWT TOKEN INFO
+--------------------
+Issuer: https://your-project.supabase.co/auth/v1
+Audience: authenticated
+Role: anon
+Expires: 2030-01-01T00:00:00.000Z
+Issued: 2024-01-01T00:00:00.000Z
+
+DATABASE ANALYSIS
+--------------------
+Schemas discovered: 2
+
+Schema: public
+
+Tables: 5
+  3 exposed | 1 empty/protected | 1 denied
+
+  [+] users (~42 rows exposed)
+  [+] posts (~150 rows exposed)
+  [+] comments (~89 rows exposed)
+  [-] profiles (0 rows - empty or RLS)
+  [X] admin_settings (access denied)
+
+RPCs: 2
+  * get_user_posts
+    - user_id: uuid (required)
+  * search_posts
+    - query: text (required)
+    - limit: int4 (optional)
+
+============================================================
+```
+
+**Visual Indicators:**
+
+- **[+]** Green - Table is readable with data exposed
+- **[-]** Yellow - Table returns 0 rows (empty or RLS protected)
+- **[X]** Red - Access denied
+
+### Dump Command Output
+
+Table dumps are displayed as formatted tables:
+
+```
+ℹ Dumping table: public.users (limit: 10)
+
+Table: public.users (150 total rows, showing 10)
+
+┌─────────┬──────────────────────────────────────┬──────────────────┬───────────────────────┐
+│ (index) │ id                                   │ email            │ created_at            │
+├─────────┼──────────────────────────────────────┼──────────────────┼───────────────────────┤
+│ 0       │ '550e8400-e29b-41d4-a716-446655440000' │ 'user1@test.com' │ '2024-01-15T10:30:00' │
+│ 1       │ '550e8400-e29b-41d4-a716-446655440001' │ 'user2@test.com' │ '2024-01-16T11:20:00' │
+└─────────┴──────────────────────────────────────┴──────────────────┴───────────────────────┘
+```
+
+### RPC Command Output
+
+```
+ℹ Calling RPC: public.get_user_posts
+ℹ Arguments: {"user_id":"550e8400-e29b-41d4-a716-446655440000"}
+
+RPC Result:
+
+┌─────────┬──────────────────────────────────────┬─────────────┬───────────────────────┐
+│ (index) │ id                                   │ title       │ created_at            │
+├─────────┼──────────────────────────────────────┼─────────────┼───────────────────────┤
+│ 0       │ '123e4567-e89b-12d3-a456-426614174000' │ 'First Post' │ '2024-01-15T10:30:00' │
+└─────────┴──────────────────────────────────────┴─────────────┴───────────────────────┘
+```
+
+### Log Messages
+
+**Info messages:**
+```
+ℹ Dumping table: public.users (limit: 10)
+```
+
+**Success messages:**
+```
+✓ Extracted credentials from: https://yourapp.com/static/js/main.js
+```
+
+**Error messages:**
+```
+✖ Failed to dump table: permission denied for table admin_table
+```
+
+**Warning messages:**
+```
+⚠ WARNING: You are using experimental features
+```
+
+## JSON Output
+
+JSON output is ideal for programmatic access, CI/CD integration, or piping to other tools.
+
+### Basic Usage
+
+```bash
+supascan --url <url> --key <key> --json
+```
+
+All output goes to **stdout**, while log messages go to **stderr**.
+
+### Analyze Command JSON
+
+**Example output:**
+
+```json
+{
+  "summary": {
+    "domain": "your-project.supabase.co",
+    "metadata": {
+      "service": "supabase",
+      "region": "your-project",
+      "title": "PostgREST API",
+      "version": "11.2.2"
+    },
+    "jwtInfo": {
+      "iss": "https://your-project.supabase.co/auth/v1",
+      "aud": "authenticated",
+      "role": "anon",
+      "exp": 1893456000,
+      "iat": 1704067200
+    }
+  },
+  "schemas": ["public", "storage"],
+  "schemaDetails": {
+    "public": {
+      "tables": ["users", "posts", "comments", "profiles", "admin_settings"],
+      "tableAccess": {
+        "users": {
+          "status": "readable",
+          "rowCount": 42
+        },
+        "posts": {
+          "status": "readable",
+          "rowCount": 150
+        },
+        "comments": {
+          "status": "readable",
+          "rowCount": 89
+        },
+        "profiles": {
+          "status": "empty"
+        },
+        "admin_settings": {
+          "status": "denied"
+        }
+      },
+      "rpcs": ["get_user_posts", "search_posts"],
+      "rpcFunctions": [
+        {
+          "name": "get_user_posts",
+          "parameters": [
+            {
+              "name": "user_id",
+              "type": "uuid",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "search_posts",
+          "parameters": [
+            {
+              "name": "query",
+              "type": "text",
+              "required": true
+            },
+            {
+              "name": "limit",
+              "type": "int4",
+              "required": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+### Dump Command JSON
+
+**Table dump:**
+
+```json
+{
+  "count": 150,
+  "rows": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "email": "user1@test.com",
+      "created_at": "2024-01-15T10:30:00.000Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "email": "user2@test.com",
+      "created_at": "2024-01-16T11:20:00.000Z"
+    }
+  ]
+}
+```
+
+**Schema dump:**
+
+```json
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "PostgREST API",
+    "version": "11.2.2"
+  },
+  "definitions": {
+    "users": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      }
+    }
+  }
+}
+```
+
+### RPC Command JSON
+
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "title": "First Post",
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "created_at": "2024-01-15T10:30:00.000Z"
+  },
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174001",
+    "title": "Second Post",
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "created_at": "2024-01-16T11:20:00.000Z"
+  }
+]
+```
+
+### Processing JSON Output
+
+**Save to file:**
+```bash
+supascan --url <url> --key <key> --json > analysis.json
+```
+
+**Use with jq:**
+```bash
+supascan --url <url> --key <key> --json | jq '.schemas[]'
+```
+
+**Count exposed tables:**
+```bash
+supascan --url <url> --key <key> --json | \
+  jq '[.schemaDetails.public.tableAccess | to_entries[] | select(.value.status == "readable")] | length'
+```
+
+**Extract all RPC names:**
+```bash
+supascan --url <url> --key <key> --json | \
+  jq -r '.schemaDetails.public.rpcFunctions[].name'
+```
+
+## HTML Output
+
+The HTML output generates an interactive web-based report with embedded analysis capabilities.
+
+### Basic Usage
+
+```bash
+supascan --url <url> --key <key> --html
+```
+
+**Output:**
+```
+✓ HTML report generated: /tmp/supascan-report-abc123.html
+```
+
+The report automatically opens in your default browser.
+
+### Features
+
+**Interactive UI:**
+- Expandable sections for schemas, tables, and RPCs
+- Color-coded access indicators
+- Sortable and filterable results
+- Real-time search
+
+**Embedded Analysis:**
+- Credentials are embedded in the HTML file
+- Can re-run analysis from the browser
+- No server required
+
+**Sharing:**
+- Single HTML file
+- No dependencies
+- Works offline
+
+### Security Considerations
+
+<Warning>
+The HTML report contains your Supabase credentials encoded in the file:
+
+```html
+<script>window.__SUPASCAN_CONFIG__ = "eyJ1cmwiOiJodHRwczovL...";</script>
+```
+
+**Important:**
+- Keep the HTML file secure
+- Don't commit to version control
+- Delete after viewing
+- Don't share publicly
+</Warning>
+
+### HTML Report Location
+
+Reports are saved to temporary directory:
+
+**Format:** `/tmp/supascan-report-{random}.html`
+
+**Find all reports:**
+```bash
+ls /tmp/supascan-report-*.html
+```
+
+**Clean up old reports:**
+```bash
+rm /tmp/supascan-report-*.html
+```
+
+## Choosing the Right Format
+
+### Use Console Output When:
+
+- Performing quick manual security audits
+- Exploring a database interactively
+- Need immediate visual feedback
+- Working in terminal environment
+
+### Use JSON Output When:
+
+- Integrating with CI/CD pipelines
+- Processing results programmatically
+- Storing results for later analysis
+- Building automation tools
+- Comparing multiple scans
+
+### Use HTML Output When:
+
+- Sharing results with team members
+- Need interactive exploration
+- Want to save a visual report
+- Presenting findings in meetings
+- Need to re-run analysis later
+
+## Output Restrictions
+
+### Conflicting Options
+
+You cannot use `--json` and `--html` together:
+
+```bash
+supascan --url <url> --key <key> --json --html
+```
+
+**Error:**
+```
+✖ Cannot use --json and --html together. Please choose one.
+```
+
+### Output Streams
+
+**stdout:** Analysis results (JSON or console formatted)
+
+**stderr:** Log messages (info, success, error, warning)
+
+**Benefits:**
+- Clean separation of data and logs
+- Easy piping: `supascan ... --json | jq`
+- Logs visible even when redirecting output
+
+## Examples
+
+### Save Console Output
+
+```bash
+supascan --url <url> --key <key> 2>&1 | tee scan.log
+```
+
+### JSON Only (No Logs)
+
+```bash
+supascan --url <url> --key <key> --json 2>/dev/null
+```
+
+### Compare Two Scans
+
+```bash
+supascan --url <url> --key <key> --json > scan1.json
+# ... make changes ...
+supascan --url <url> --key <key> --json > scan2.json
+diff <(jq -S . scan1.json) <(jq -S . scan2.json)
+```
+
+### CI/CD Integration
+
+```bash
+#!/bin/bash
+set -e
+
+# Run scan and save results
+supascan --url "$SUPABASE_URL" --key "$SUPABASE_KEY" --json > scan.json
+
+# Check for exposed tables
+EXPOSED=$(jq '[.schemaDetails.public.tableAccess | to_entries[] | select(.value.status == "readable")] | length' scan.json)
+
+if [ "$EXPOSED" -gt 0 ]; then
+  echo "Warning: $EXPOSED tables are exposed!"
+  exit 1
+fi
+```
+
+## Related Pages
+
+- [analyze](/cli/analyze) - Main analysis command
+- [dump](/cli/dump) - Dump command details
+- [rpc](/cli/rpc) - RPC command details
+- [Options Reference](/cli/options) - All available CLI options

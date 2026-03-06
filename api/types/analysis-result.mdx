@@ -1,0 +1,281 @@
+---
+title: AnalysisResult Types
+description: TypeScript type definitions for analysis results, schema analysis, and JWT information
+---
+
+Types related to the output of the `analyze()` function.
+
+## AnalysisResult
+
+The complete result of analyzing a Supabase instance.
+
+```typescript analyzer.types.ts
+export type AnalysisResult = {
+  schemas: string[];
+  schemaDetails: Record<string, SchemaAnalysis>;
+  summary: {
+    domain: string;
+    jwtInfo?: JWTInfo;
+    metadata?: SummaryMetadata;
+  };
+};
+```
+
+### Fields
+
+<ResponseField name="schemas" type="string[]" required>
+  Array of all discovered schema names in the Supabase instance
+</ResponseField>
+
+<ResponseField name="schemaDetails" type="Record<string, SchemaAnalysis>" required>
+  Detailed analysis for each schema, keyed by schema name. See [SchemaAnalysis](#schemaanalysis) below.
+</ResponseField>
+
+<ResponseField name="summary" type="object" required>
+  Summary information about the Supabase instance
+  
+  <ResponseField name="summary.domain" type="string" required>
+    The domain/hostname of the Supabase instance (e.g., `xxx.supabase.co`)
+  </ResponseField>
+  
+  <ResponseField name="summary.jwtInfo" type="JWTInfo">
+    Decoded JWT token information from the API key. See [JWTInfo](#jwtinfo) below.
+  </ResponseField>
+  
+  <ResponseField name="summary.metadata" type="SummaryMetadata">
+    Additional metadata about the instance. See [SummaryMetadata](#summarymetadata) below.
+  </ResponseField>
+</ResponseField>
+
+### Example
+
+```typescript
+const result: AnalysisResult = {
+  schemas: ['public', 'auth'],
+  schemaDetails: {
+    public: {
+      tables: ['users', 'posts', 'comments'],
+      rpcs: ['rpc/get_user_posts'],
+      rpcFunctions: [
+        {
+          name: 'rpc/get_user_posts',
+          parameters: [
+            { name: 'user_id', type: 'integer', required: true }
+          ]
+        }
+      ],
+      tableAccess: {
+        users: { status: 'readable', accessible: true, hasData: true, rowCount: 150 },
+        posts: { status: 'denied', accessible: false, hasData: false },
+        comments: { status: 'empty', accessible: true, hasData: false, rowCount: 0 }
+      }
+    }
+  },
+  summary: {
+    domain: 'xxx.supabase.co',
+    jwtInfo: {
+      role: 'anon',
+      iss: 'supabase',
+      exp: 1735689600
+    },
+    metadata: {
+      service: 'Supabase',
+      protocol: 'https:',
+      port: '443'
+    }
+  }
+};
+```
+
+---
+
+## SchemaAnalysis
+
+Detailed analysis of a single database schema.
+
+```typescript analyzer.types.ts
+export type SchemaAnalysis = {
+  tables: string[];
+  rpcs: string[];
+  rpcFunctions: RPCFunction[];
+  tableAccess: Record<string, TableAccessResult>;
+};
+```
+
+### Fields
+
+<ResponseField name="tables" type="string[]" required>
+  Array of table names in this schema
+</ResponseField>
+
+<ResponseField name="rpcs" type="string[]" required>
+  Array of RPC endpoint paths (e.g., `['rpc/function_name']`)
+</ResponseField>
+
+<ResponseField name="rpcFunctions" type="RPCFunction[]" required>
+  Detailed information about each RPC including parameters. See [RPCFunction](/api/types/table-access#rpcfunction).
+</ResponseField>
+
+<ResponseField name="tableAccess" type="Record<string, TableAccessResult>" required>
+  Access test results for each table, keyed by table name. See [TableAccessResult](/api/types/table-access).
+</ResponseField>
+
+### Example
+
+```typescript
+const schemaAnalysis: SchemaAnalysis = {
+  tables: ['users', 'posts'],
+  rpcs: ['rpc/get_user_posts', 'rpc/create_post'],
+  rpcFunctions: [
+    {
+      name: 'rpc/get_user_posts',
+      parameters: [
+        { name: 'user_id', type: 'integer', required: true },
+        { name: 'limit', type: 'integer', required: false }
+      ]
+    }
+  ],
+  tableAccess: {
+    users: { status: 'readable', accessible: true, hasData: true, rowCount: 42 },
+    posts: { status: 'denied', accessible: false, hasData: false }
+  }
+};
+```
+
+---
+
+## JWTInfo
+
+Decoded JWT token information from the Supabase API key.
+
+```typescript analyzer.types.ts
+export type JWTInfo = {
+  iss?: string;
+  aud?: string;
+  exp?: number;
+  iat?: number;
+  sub?: string;
+  role?: string;
+  [key: string]: unknown;
+};
+```
+
+### Fields
+
+<ResponseField name="iss" type="string">
+  Issuer of the token (typically `"supabase"`)
+</ResponseField>
+
+<ResponseField name="aud" type="string">
+  Audience for the token
+</ResponseField>
+
+<ResponseField name="exp" type="number">
+  Expiration timestamp (Unix timestamp)
+</ResponseField>
+
+<ResponseField name="iat" type="number">
+  Issued at timestamp (Unix timestamp)
+</ResponseField>
+
+<ResponseField name="sub" type="string">
+  Subject of the token
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  Role assigned to this token (e.g., `"anon"`, `"authenticated"`)
+</ResponseField>
+
+<ResponseField name="[key: string]" type="unknown">
+  Additional custom claims may be present
+</ResponseField>
+
+### Example
+
+```typescript
+const jwtInfo: JWTInfo = {
+  iss: 'supabase',
+  aud: 'authenticated',
+  exp: 1735689600,
+  iat: 1704067200,
+  role: 'anon'
+};
+```
+
+---
+
+## SummaryMetadata
+
+Metadata extracted from the Supabase instance URL and configuration.
+
+```typescript analyzer.types.ts
+export type SummaryMetadata = {
+  service?: string;
+  region?: string;
+  protocol?: string;
+  port?: string;
+  version?: string;
+  title?: string;
+  description?: string;
+};
+```
+
+### Fields
+
+<ResponseField name="service" type="string">
+  Service name (typically `"Supabase"`)
+</ResponseField>
+
+<ResponseField name="region" type="string">
+  Project ID/region identifier extracted from hostname
+</ResponseField>
+
+<ResponseField name="protocol" type="string">
+  Protocol used (`"https:"` or `"http:"`)
+</ResponseField>
+
+<ResponseField name="port" type="string">
+  Port number (typically `"443"` for HTTPS)
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  API version if available from Swagger metadata
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  API title if available from Swagger metadata
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  API description if available from Swagger metadata
+</ResponseField>
+
+### Example
+
+```typescript
+const metadata: SummaryMetadata = {
+  service: 'Supabase',
+  region: 'abc123xyz',
+  protocol: 'https:',
+  port: '443',
+  version: '1.0.0',
+  title: 'My Supabase API'
+};
+```
+
+---
+
+## Related Events
+
+These types are returned in the following events:
+
+- `analysis_completed` - Contains full `AnalysisResult`
+- `schema_analysis_completed` - Contains `SchemaAnalysis` for a specific schema
+
+See [analyze()](/api/analyzer) for more information about these events.
+
+## Related
+
+- [analyze() Function](/api/analyzer)
+- [Table Access Types](/api/types/table-access)
+- [Extractor Events](/api/types/extractor-events)

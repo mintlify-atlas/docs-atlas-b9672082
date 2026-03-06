@@ -1,0 +1,276 @@
+---
+title: "extract"
+description: "Automatically extract Supabase credentials from JavaScript files on web applications"
+---
+
+## Overview
+
+The `--extract` flag (or `-x` shorthand) allows SupaScan to automatically discover and extract Supabase credentials from JavaScript files served by a web application.
+
+<Warning>
+The extract feature is **experimental**. It attempts to parse JavaScript files and extract Supabase configuration, which may not work for all applications. Use with caution.
+</Warning>
+
+## Basic Usage
+
+```bash
+supascan --extract https://yourapp.com
+```
+
+Or using the shorthand:
+
+```bash
+supascan -x https://yourapp.com
+```
+
+## How It Works
+
+SupaScan performs the following steps:
+
+1. **Fetch the target URL** - Downloads the HTML page
+2. **Parse script tags** - Identifies JavaScript files to analyze
+3. **Search for credentials** - Looks for Supabase initialization patterns
+4. **Extract URL and key** - Captures the Supabase URL and anon key
+5. **Run analysis** - Automatically proceeds with security analysis
+
+## Experimental Warning
+
+When using `--extract`, SupaScan displays a warning:
+
+```
+⚠ WARNING: You are using experimental features
+```
+
+To suppress this warning:
+
+```bash
+supascan --extract https://yourapp.com --suppress-experimental-warnings
+```
+
+## Debug Mode
+
+To see detailed extraction progress, use `--debug`:
+
+```bash
+supascan --extract https://yourapp.com --debug
+```
+
+**Example debug output:**
+
+```
+[DEBUG] Fetched 45832 bytes (text/html; charset=utf-8)
+[DEBUG] Checking script: https://yourapp.com/_next/static/chunks/main.js
+[DEBUG] Checking script: https://yourapp.com/_next/static/chunks/pages/index.js
+✓ Extracted credentials from: https://yourapp.com/_next/static/chunks/pages/index.js
+[DEBUG] URL: https://your-project.supabase.co
+[DEBUG] Key: eyJhbGciOiJIUzI1NiIs...
+```
+
+## Success Output
+
+When extraction succeeds:
+
+```
+✓ Extracted credentials from: https://yourapp.com/static/js/main.chunk.js
+```
+
+SupaScan then automatically proceeds with the security analysis using the extracted credentials.
+
+## Common Patterns Detected
+
+SupaScan looks for common Supabase initialization patterns:
+
+```javascript
+// Pattern 1: createClient call
+const supabase = createClient(
+  'https://your-project.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+)
+
+// Pattern 2: Environment variables
+const SUPABASE_URL = 'https://your-project.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+
+// Pattern 3: Configuration objects
+const config = {
+  supabaseUrl: 'https://your-project.supabase.co',
+  supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+}
+```
+
+## Combining with Other Options
+
+### Extract and Generate HTML Report
+
+```bash
+supascan --extract https://yourapp.com --html
+```
+
+### Extract and Output as JSON
+
+```bash
+supascan --extract https://yourapp.com --json > analysis.json
+```
+
+### Extract Specific Schema
+
+```bash
+supascan --extract https://yourapp.com --schema public
+```
+
+### Extract with Custom Headers
+
+```bash
+supascan --extract https://yourapp.com \
+  --header "Cookie: session=abc123" \
+  --header "User-Agent: Custom"
+```
+
+## Overriding Extracted Credentials
+
+You can override the extracted URL or key:
+
+```bash
+supascan --extract https://yourapp.com --key your_custom_key
+```
+
+This is useful if:
+- You want to test with a different API key
+- The extracted key is incorrect
+- You want to test with service role key (be careful!)
+
+## Error Handling
+
+### No Credentials Found
+
+```bash
+supascan --extract https://yourapp.com
+```
+
+```
+✖ Failed to extract credentials: No Supabase credentials found in JavaScript files
+```
+
+**Possible reasons:**
+- Credentials are loaded dynamically at runtime
+- JavaScript is minified/obfuscated beyond recognition
+- Supabase is not actually used by the application
+- Credentials are fetched from a backend API
+
+### Network Error
+
+```
+✖ Failed to extract credentials: Network request failed
+```
+
+### Invalid URL
+
+```bash
+supascan --extract not-a-url
+```
+
+```
+✖ Failed to extract credentials: Invalid URL format
+```
+
+## Security Considerations
+
+<Warning>
+**Important Security Notes:**
+
+1. **Public Credentials Only**: Extract only finds credentials that are publicly exposed in client-side JavaScript. This is by design - these credentials are already public.
+
+2. **Anon Key**: The extracted key is typically the "anon" (anonymous) key, which has limited permissions.
+
+3. **Respect Scope**: Only use extract on applications you own or have permission to test.
+
+4. **Bug Bounties**: If using for bug bounty, ensure your program rules allow automated scanning.
+</Warning>
+
+## When to Use Extract
+
+**Good use cases:**
+- Quick security audit of your own application
+- Testing during development
+- Verifying RLS policies are working
+- Bug bounty research (with permission)
+
+**Not recommended for:**
+- Applications with complex authentication flows
+- SPAs that load credentials asynchronously
+- Sites with aggressive anti-bot protections
+- Testing without permission
+
+## Troubleshooting
+
+### Extract Not Finding Credentials
+
+1. **Try with debug mode** to see what's being checked:
+   ```bash
+   supascan --extract https://yourapp.com --debug
+   ```
+
+2. **Check the page source** - Verify credentials are in the JavaScript
+
+3. **Try specific page** - Use a page where Supabase is definitely initialized:
+   ```bash
+   supascan --extract https://yourapp.com/dashboard
+   ```
+
+4. **Manual extraction** - If automatic extraction fails, manually provide credentials:
+   ```bash
+   supascan --url <url> --key <key>
+   ```
+
+### CORS or Network Issues
+
+If you encounter CORS errors, it may be because:
+- The site blocks programmatic access
+- Anti-bot measures are in place
+- Custom headers are required
+
+Try adding headers:
+```bash
+supascan --extract https://yourapp.com \
+  --header "User-Agent: Mozilla/5.0"
+```
+
+## Implementation Details
+
+The extract feature:
+
+1. Uses the `extractFromUrl` function from `@supascan/core`
+2. Fetches HTML and parses for script tags
+3. Downloads and analyzes JavaScript files
+4. Uses pattern matching to identify Supabase credentials
+5. Returns the first valid credential pair found
+
+**Source location:** `/home/daytona/workspace/source/apps/cli/src/context.ts:30-72`
+
+## Options Reference
+
+<ParamField path="--extract" type="string" required>
+  URL of the web application to extract credentials from
+</ParamField>
+
+<ParamField path="-x" type="string" required>
+  Shorthand for `--extract`
+</ParamField>
+
+<ParamField path="--debug" type="boolean">
+  Show detailed extraction progress and debugging information
+</ParamField>
+
+<ParamField path="--suppress-experimental-warnings" type="boolean">
+  Hide the experimental feature warning
+</ParamField>
+
+<ParamField path="--header" type="string">
+  Add custom HTTP headers for the extraction request (can be used multiple times)
+</ParamField>
+
+## Related Commands
+
+- [analyze](/cli/analyze) - Run analysis after extraction
+- [Options Reference](/cli/options) - All available CLI options
+- [Output Formats](/cli/output-formats) - Choose output format

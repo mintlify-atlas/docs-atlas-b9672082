@@ -1,0 +1,178 @@
+---
+title: analyze()
+description: Comprehensive analysis of Supabase instances including schema discovery, table enumeration, RPC discovery, and access testing
+---
+
+The `analyze()` function performs a comprehensive security analysis of a Supabase instance, discovering schemas, tables, RPCs, and testing table access permissions.
+
+## Function Signature
+
+```typescript analyzer.ts
+export async function* analyze(
+  client: SupabaseClient,
+  url: string,
+  key: string,
+  options: { schema?: string; skipAccessTest?: boolean } = {},
+): AsyncGenerator<AnalyzerEvent | SupabaseEvent, Result<AnalysisResult>>
+```
+
+## Parameters
+
+<ParamField path="client" type="SupabaseClient" required>
+  A Supabase client instance created with `createClient()` from `@supabase/supabase-js`
+</ParamField>
+
+<ParamField path="url" type="string" required>
+  The Supabase project URL (e.g., `https://xxx.supabase.co`)
+</ParamField>
+
+<ParamField path="key" type="string" required>
+  The Supabase anon/public API key (JWT token)
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional configuration object
+  
+  <ParamField path="options.schema" type="string">
+    Limit analysis to a specific schema. If not provided, all available schemas will be analyzed
+  </ParamField>
+  
+  <ParamField path="options.skipAccessTest" type="boolean" default="false">
+    Skip table access testing. Set to `true` to speed up analysis if you don't need access information
+  </ParamField>
+</ParamField>
+
+## Return Value
+
+Returns an `AsyncGenerator` that:
+- **Yields**: `AnalyzerEvent` or `SupabaseEvent` objects during analysis
+- **Returns**: `Result<AnalysisResult>` when complete
+
+## Events
+
+The analyzer emits the following events during execution:
+
+### Analyzer Events
+
+<ResponseField name="analysis_started" type="AnalyzerEvent">
+  Emitted when analysis begins
+  
+  ```typescript
+  { type: "analysis_started", data: {} }
+  ```
+</ResponseField>
+
+<ResponseField name="schema_analysis_started" type="AnalyzerEvent">
+  Emitted when analyzing a specific schema
+  
+  ```typescript
+  { type: "schema_analysis_started", data: { schema: string } }
+  ```
+</ResponseField>
+
+<ResponseField name="schema_analysis_completed" type="AnalyzerEvent">
+  Emitted when schema analysis completes
+  
+  ```typescript
+  {
+    type: "schema_analysis_completed",
+    data: { schema: string, analysis: SchemaAnalysis }
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="analysis_completed" type="AnalyzerEvent">
+  Emitted when entire analysis is complete
+  
+  ```typescript
+  { type: "analysis_completed", data: { result: AnalysisResult } }
+  ```
+</ResponseField>
+
+### Supabase Events
+
+See [Supabase Client Events](/api/supabase-client#events) for events emitted by underlying operations like `getSchemas()`, `getTables()`, `getRPCs()`, and `testTablesRead()`.
+
+## Usage Example
+
+```typescript
+import { createClient } from '@supabase/supabase-js';
+import { analyze } from '@supascan/core';
+
+const url = 'https://xxx.supabase.co';
+const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+
+const client = createClient(url, key);
+const generator = analyze(client, url, key);
+
+for await (const event of generator) {
+  switch (event.type) {
+    case 'analysis_started':
+      console.log('Starting analysis...');
+      break;
+      
+    case 'schema_analysis_started':
+      console.log(`Analyzing schema: ${event.data.schema}`);
+      break;
+      
+    case 'tables_discovered':
+      console.log(`Found ${event.data.tables.length} tables`);
+      break;
+      
+    case 'analysis_completed':
+      console.log('Analysis complete!');
+      console.log('Result:', event.data.result);
+      break;
+  }
+}
+```
+
+## Analyzing a Specific Schema
+
+```typescript
+const generator = analyze(client, url, key, { schema: 'public' });
+
+for await (const event of generator) {
+  // Only events for the 'public' schema will be emitted
+}
+```
+
+## Skipping Access Tests
+
+```typescript
+const generator = analyze(client, url, key, { skipAccessTest: true });
+
+for await (const event of generator) {
+  // Table access testing will be skipped
+  // Analysis will complete faster
+}
+```
+
+## Getting the Final Result
+
+```typescript
+const generator = analyze(client, url, key);
+
+let finalResult;
+for await (const event of generator) {
+  // Process events...
+}
+
+// After the loop completes, get the final result
+const result = await generator.next();
+if (result.done && result.value.success) {
+  console.log('Analysis result:', result.value.value);
+} else if (result.done && !result.value.success) {
+  console.error('Analysis failed:', result.value.error);
+}
+```
+
+## Analysis Result Structure
+
+See [AnalysisResult](/api/types/analysis-result) for the complete structure of the returned data.
+
+## Related
+
+- [AnalysisResult Type](/api/types/analysis-result)
+- [Supabase Client Functions](/api/supabase-client)
+- [Extractor Events](/api/types/extractor-events)

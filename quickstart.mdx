@@ -1,80 +1,243 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Run your first SupaScan security scan in minutes - from installation to viewing results
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
+This guide walks you through performing your first security scan with SupaScan. You'll extract credentials from a website, analyze the database, and view an interactive report.
 
-### Step 1: Set up your local environment
+<Info>
+Before starting, ensure you have [installed SupaScan](/installation).
+</Info>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Basic Scan Workflow
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Extract Credentials from Website">
+    The simplest way to use SupaScan is to point it at any website using Supabase. It will automatically extract the Supabase URL and anon key:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    supascan -x https://example.com --html
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    This command:
+    - Fetches the HTML from `https://example.com`
+    - Parses inline scripts and external JavaScript bundles
+    - Extracts the Supabase URL and anon key using pattern matching
+    - Runs a complete security scan
+    - Opens an interactive HTML report in your browser
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Tip>
+    The `-x` or `--extract` flag enables automatic credential extraction from websites.
+    </Tip>
+  </Step>
 
-### Step 3: Go live
+  <Step title="View the Analysis Results">
+    SupaScan will output progress information as it scans:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    Extracting credentials from https://example.com...
+    Found Supabase credentials
+    URL: https://xyz.supabase.co
+    Analyzing database...
+    Discovering schemas...
+    Testing RLS policies...
+    Generating HTML report...
+    ```
 
-## Next steps
+    The HTML report opens automatically and includes:
+    - **Schema Browser**: Navigate through discovered schemas and tables
+    - **Table Explorer**: View sample data from exposed tables with pagination
+    - **RPC Tester**: Test discovered RPC functions with parameter forms
+    - **Live Query Interface**: Run custom queries against the database
+  </Step>
 
-Now that you have your docs running, explore these key features:
+  <Step title="Interpret the Results">
+    SupaScan categorizes tables into three types:
 
-<CardGroup cols={2}>
+    **[+] Exposed Tables**
+    ```
+    [+] users (~1420 rows exposed)
+    ```
+    These tables have data accessible with the anon key. This may indicate misconfigured RLS policies.
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+    **[-] Protected Tables**
+    ```
+    [-] sessions (0 rows - empty or RLS)
+    ```
+    These tables exist but return no data, indicating proper RLS protection or empty tables.
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    **[X] Denied Tables**
+    ```
+    [X] admin_users (access denied)
+    ```
+    These tables deny read access entirely - the most secure configuration.
+  </Step>
+</Steps>
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+## Alternative Methods
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+### Using Manual Credentials
 
-</CardGroup>
+If you already have the Supabase URL and anon key, provide them directly:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... --html
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+The anon key is a JWT token that starts with `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`.
 </Note>
+
+### Console Output Only
+
+For terminal output without the HTML report, omit the `--html` flag:
+
+```bash
+supascan --extract https://example.com
+```
+
+This displays results directly in your terminal:
+
+```bash
+============================================================
+  SUPABASE DATABASE ANALYSIS
+============================================================
+
+TARGET SUMMARY
+--------------------
+Domain: xyz.supabase.co
+Project ID: xyz
+
+JWT TOKEN INFO
+--------------------
+Issuer: https://xyz.supabase.co/auth/v1
+Role: anon
+Expires: 2030-01-01T00:00:00.000Z
+
+DATABASE ANALYSIS
+--------------------
+Schemas discovered: 2
+
+Schema: public
+
+Tables: 8
+  3 exposed | 2 empty/protected | 3 denied
+
+  [+] users (~1420 rows exposed)
+  [+] posts (~892 rows exposed)
+  [+] comments (~3201 rows exposed)
+  [-] sessions (0 rows - empty or RLS)
+  [-] audit_logs (0 rows - empty or RLS)
+  [X] admin_users (access denied)
+  [X] secrets (access denied)
+  [X] internal_config (access denied)
+
+RPCs: 2
+  * get_public_stats
+    No parameters
+  * search_users
+    - query: string (required)
+    - limit: integer (optional)
+```
+
+## Advanced Usage
+
+### Analyze Specific Schema
+
+Focus analysis on a specific schema:
+
+```bash
+supascan -x https://example.com --schema public
+```
+
+### Dump Table Data
+
+Extract data from a specific table:
+
+```bash
+supascan --extract https://example.com --dump public.users --limit 100
+```
+
+<Warning>
+Be cautious when dumping data. Even with the anon key, exposed data may contain sensitive information.
+</Warning>
+
+### Call RPC Functions
+
+Test discovered RPC functions:
+
+```bash
+supascan --extract https://example.com --rpc public.search_users --args '{"query": "admin"}'
+```
+
+You can use environment variables in arguments:
+
+```bash
+export USER_ID="123"
+supascan --url $URL --key $KEY --rpc public.lookup --args '{"id": "$USER_ID"}'
+```
+
+### JSON Output
+
+Generate machine-readable JSON output for integration with other tools:
+
+```bash
+supascan --extract https://example.com --json > report.json
+```
+
+<Tip>
+JSON output is useful for CI/CD pipelines or automated security scanning workflows.
+</Tip>
+
+## What to Look For
+
+When reviewing scan results, pay attention to:
+
+1. **High Row Counts on Exposed Tables**: Tables with thousands of exposed rows likely need RLS policies
+2. **Sensitive Table Names**: Tables named `users`, `profiles`, `private_*` should be protected
+3. **RPC Functions**: Verify that RPC functions don't expose sensitive operations
+4. **Schema Information**: Exposed column names may reveal application logic
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Get Authorization" icon="clipboard-check">
+    Only scan databases you own or have explicit permission to test
+  </Card>
+  
+  <Card title="Test Development First" icon="flask">
+    Run scans against development/staging environments before production
+  </Card>
+  
+  <Card title="Document Findings" icon="file-lines">
+    Use `--json` output to maintain records of security assessments
+  </Card>
+  
+  <Card title="Regular Scanning" icon="clock">
+    Incorporate SupaScan into your CI/CD pipeline for continuous security testing
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+Now that you've run your first scan, explore more advanced features:
+
+<CardGroup cols={2}>
+  <Card title="CLI Reference" icon="terminal" href="/cli/options">
+    Complete guide to all commands and options
+  </Card>
+  
+  <Card title="RLS Testing" icon="shield-halved" href="/concepts/rls-testing">
+    Learn how Row-Level Security testing works
+  </Card>
+  
+  <Card title="Dumping Data" icon="download" href="/guides/dumping-data">
+    Extract data from exposed tables
+  </Card>
+  
+  <Card title="Testing RPCs" icon="function" href="/guides/testing-rpcs">
+    Test RPC functions for security issues
+  </Card>
+</CardGroup>

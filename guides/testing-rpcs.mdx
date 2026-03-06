@@ -1,0 +1,420 @@
+---
+title: "Testing RPCs"
+description: "Call and test Supabase RPC functions to identify security vulnerabilities"
+---
+
+## Overview
+
+Supabase Remote Procedure Call (RPC) functions are PostgreSQL functions exposed via the API. They can bypass Row Level Security (RLS) policies if not properly configured, making them critical targets for security testing.
+
+<Warning>
+RPC functions with `SECURITY DEFINER` run with elevated privileges and can leak data if not carefully implemented.
+</Warning>
+
+## Discovering RPC Functions
+
+First, scan the database to find available RPC functions:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG...
+```
+
+Look for the RPC section in the output:
+
+```text
+RPCs: 2
+  * get_public_stats
+    No parameters
+  * search_users
+    - query: string (required)
+    - limit: integer (optional)
+```
+
+## Calling RPC Functions
+
+Use the `--rpc` flag to call a function:
+
+```bash
+supascan --rpc <schema>.<function_name> --url $URL --key $KEY
+```
+
+<Info>
+RPC functions must be specified with their schema, typically `public.function_name`.
+</Info>
+
+### Basic RPC Call
+
+Call a function with no parameters:
+
+```bash
+supascan --rpc public.get_public_stats --url $URL --key $KEY
+```
+
+<Steps>
+  <Step title="Identify the RPC function">
+    Run a scan to discover available functions and their parameters.
+  </Step>
+  
+  <Step title="Call the function">
+    Use the `--rpc` flag with the fully qualified function name:
+    
+    ```bash
+    supascan --rpc public.get_public_stats --url $URL --key $KEY
+    ```
+  </Step>
+  
+  <Step title="Review the results">
+    Examine the returned data for:
+    - Sensitive information
+    - Unexpected data exposure
+    - Information that should be restricted
+  </Step>
+</Steps>
+
+## Passing Arguments
+
+Many RPC functions require parameters. Use the `--args` flag with JSON:
+
+```bash
+supascan --rpc public.search_users --args '{"query": "admin"}' --url $URL --key $KEY
+```
+
+### Arguments Syntax
+
+The `--args` flag accepts a JSON object:
+
+<CodeGroup>
+```bash Simple string argument
+supascan --rpc public.search_users \
+  --args '{"query": "admin"}' \
+  --url $URL --key $KEY
+```
+
+```bash Multiple arguments
+supascan --rpc public.search_users \
+  --args '{"query": "admin", "limit": 10}' \
+  --url $URL --key $KEY
+```
+
+```bash Complex arguments
+supascan --rpc public.filter_posts \
+  --args '{"filter": {"category": "news", "published": true}, "page": 1}' \
+  --url $URL --key $KEY
+```
+</CodeGroup>
+
+### Environment Variables in Arguments
+
+Use `$VARIABLE` syntax to inject environment variables:
+
+```bash
+export USER_ID="123e4567-e89b-12d3-a456-426614174000"
+
+supascan --rpc public.lookup \
+  --args '{"id": "$USER_ID"}' \
+  --url $URL --key $KEY
+```
+
+<Info>
+Environment variables are automatically replaced with their values before the RPC call is made.
+</Info>
+
+#### Multiple Environment Variables
+
+```bash
+export SEARCH_TERM="admin"
+export MAX_RESULTS="50"
+
+supascan --rpc public.search_users \
+  --args '{"query": "$SEARCH_TERM", "limit": "$MAX_RESULTS"}' \
+  --url $URL --key $KEY
+```
+
+## Output Formats
+
+### Console Output (Default)
+
+Results are displayed as a formatted table:
+
+```bash
+supascan --rpc public.search_users --args '{"query": "admin"}' --url $URL --key $KEY
+```
+
+```text
+RPC Result:
+
+┌────┬──────────┬───────────────────┬──────────┐
+│ id │ username │ email             │ role     │
+├────┼──────────┼───────────────────┼──────────┤
+│ 1  │ admin    │ admin@example.com │ admin    │
+│ 5  │ sysadmin │ sys@example.com   │ admin    │
+└────┴──────────┴───────────────────┴──────────┘
+```
+
+### JSON Output
+
+Get structured JSON for processing:
+
+```bash
+supascan --rpc public.search_users \
+  --args '{"query": "admin"}' \
+  --json \
+  --url $URL --key $KEY
+```
+
+```json
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@example.com",
+    "role": "admin"
+  },
+  {
+    "id": 5,
+    "username": "sysadmin",
+    "email": "sys@example.com",
+    "role": "admin"
+  }
+]
+```
+
+## Limiting Results
+
+Control the number of results with `--limit`:
+
+```bash
+supascan --rpc public.get_all_users --limit 20 --url $URL --key $KEY
+```
+
+<Info>
+The default limit is 10. Adjust based on your testing needs.
+</Info>
+
+## Query Execution Plans
+
+Use `--explain` to see how PostgreSQL executes the RPC:
+
+```bash
+supascan --rpc public.search_users \
+  --args '{"query": "admin"}' \
+  --explain \
+  --url $URL --key $KEY
+```
+
+This returns the PostgreSQL EXPLAIN output:
+
+```text
+Query Execution Plan:
+
+Seq Scan on users  (cost=0.00..35.50 rows=10 width=72)
+  Filter: (username ~~ '%admin%'::text)
+```
+
+Useful for:
+- Understanding performance
+- Identifying missing indexes
+- Debugging slow queries
+
+## Security Testing Examples
+
+<AccordionGroup>
+  <Accordion title="Testing for data leaks" icon="bug">
+    Call functions with various inputs to test boundaries:
+    
+    ```bash
+    # Test with empty query
+    supascan --rpc public.search_users --args '{"query": ""}' --url $URL --key $KEY
+    
+    # Test with wildcard
+    supascan --rpc public.search_users --args '{"query": "%"}' --url $URL --key $KEY
+    
+    # Test with SQL injection attempts
+    supascan --rpc public.search_users --args '{"query": "' OR '1'='1"}' --url $URL --key $KEY
+    ```
+    
+    Check if:
+    - Empty queries return all data
+    - Wildcards expose everything
+    - Input validation is proper
+  </Accordion>
+  
+  <Accordion title="Testing authentication bypass" icon="shield-xmark">
+    Try accessing admin-only functions with the anon key:
+    
+    ```bash
+    # These should fail with proper security
+    supascan --rpc public.admin_delete_user --args '{"user_id": 123}' --url $URL --key $ANON_KEY
+    supascan --rpc public.get_all_api_keys --url $URL --key $ANON_KEY
+    ```
+    
+    Functions that succeed may have:
+    - Missing authentication checks
+    - Incorrect `SECURITY DEFINER` usage
+    - No RLS policy enforcement
+  </Accordion>
+  
+  <Accordion title="Testing parameter validation" icon="check">
+    Send unexpected parameter types:
+    
+    ```bash
+    # Send string instead of integer
+    supascan --rpc public.get_user --args '{"id": "not_a_number"}' --url $URL --key $KEY
+    
+    # Send negative numbers
+    supascan --rpc public.get_posts --args '{"limit": -1}' --url $URL --key $KEY
+    
+    # Send null values
+    supascan --rpc public.update_profile --args '{"name": null}' --url $URL --key $KEY
+    ```
+  </Accordion>
+  
+  <Accordion title="Testing rate limits" icon="gauge">
+    Call functions repeatedly to test rate limiting:
+    
+    ```bash
+    for i in {1..100}; do
+      supascan --rpc public.expensive_query --url $URL --key $KEY
+    done
+    ```
+    
+    Properly configured APIs should:
+    - Rate limit requests
+    - Return 429 status codes
+    - Protect against abuse
+  </Accordion>
+</AccordionGroup>
+
+## Common Vulnerabilities
+
+### SECURITY DEFINER Functions
+
+Functions with `SECURITY DEFINER` run with the privileges of the function owner (usually `postgres`), bypassing RLS:
+
+```sql
+-- VULNERABLE: Returns all users regardless of RLS
+CREATE FUNCTION get_all_users()
+RETURNS SETOF users
+SECURITY DEFINER  -- ⚠️ Runs as owner!
+AS $$
+  SELECT * FROM users;
+$$;
+```
+
+Test for this:
+
+```bash
+supascan --rpc public.get_all_users --url $URL --key $ANON_KEY
+```
+
+If this returns data from a protected table, it's vulnerable.
+
+### Missing Input Validation
+
+```sql
+-- VULNERABLE: No input sanitization
+CREATE FUNCTION search_users(search_term TEXT)
+RETURNS SETOF users
+AS $$
+  SELECT * FROM users WHERE username ILIKE search_term;
+$$;
+```
+
+Test:
+
+```bash
+# This might return all users
+supascan --rpc public.search_users --args '{"search_term": "%"}' --url $URL --key $KEY
+```
+
+### No Authentication Checks
+
+```sql
+-- VULNERABLE: Anyone can call this
+CREATE FUNCTION delete_user(user_id INT)
+RETURNS VOID
+AS $$
+  DELETE FROM users WHERE id = user_id;
+$$;
+```
+
+Test with anon key:
+
+```bash
+supascan --rpc public.delete_user --args '{"user_id": 1}' --url $URL --key $ANON_KEY
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test all RPC functions" icon="list-check">
+    Don't skip any functions - each one could be a security hole.
+  </Card>
+  
+  <Card title="Use SECURITY INVOKER" icon="user">
+    Functions should respect caller permissions unless absolutely necessary.
+  </Card>
+  
+  <Card title="Validate all inputs" icon="shield-check">
+    Never trust user input - always validate and sanitize.
+  </Card>
+  
+  <Card title="Add authentication checks" icon="lock">
+    Verify `auth.uid()` and roles within sensitive functions.
+  </Card>
+</CardGroup>
+
+## Combining with Extraction
+
+Test RPCs from automatically extracted credentials:
+
+```bash
+supascan -x https://example.com --rpc public.search_users --args '{"query": "admin"}'
+```
+
+This:
+1. Extracts credentials from the site
+2. Calls the specified RPC function
+3. Returns the results
+
+## Automated Testing
+
+Script to test multiple RPC functions:
+
+```bash
+#!/bin/bash
+URL="https://xyz.supabase.co"
+KEY="eyJhbG..."
+
+# Test functions with no params
+for func in get_public_stats get_config get_stats; do
+  echo "Testing $func..."
+  supascan --rpc "public.$func" --url $URL --key $KEY --json > "$func.json"
+done
+
+# Test search functions
+for term in "admin" "user" "test" "%"; do
+  echo "Testing search with: $term"
+  supascan --rpc public.search_users --args "{\"query\": \"$term\"}" --url $URL --key $KEY
+done
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HTML Reports" icon="browser" href="/guides/html-reports">
+    Use the interactive RPC tester in HTML reports.
+  </Card>
+  
+  <Card title="Environment Variables" icon="terminal" href="/advanced/environment-variables">
+    Learn more about using environment variables in arguments.
+  </Card>
+  
+  <Card title="JSON Output" icon="code" href="/advanced/json-output">
+    Process RPC results programmatically.
+  </Card>
+  
+  <Card title="RLS Testing" icon="shield" href="/concepts/rls-testing">
+    Understand how RPCs interact with Row Level Security.
+  </Card>
+</CardGroup>

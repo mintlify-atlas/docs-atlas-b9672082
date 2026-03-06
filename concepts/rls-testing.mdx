@@ -1,0 +1,304 @@
+---
+title: 'RLS Testing'
+description: 'Understanding how SupaScan tests Row-Level Security policies and identifies unauthorized data access'
+---
+
+## Overview
+
+Row-Level Security (RLS) testing is SupaScan's primary security validation mechanism. It attempts to read data from every discovered table using the extracted anonymous key to determine if sensitive data is exposed due to misconfigured or missing RLS policies.
+
+## Access Status Types
+
+SupaScan categorizes table access into three distinct states:
+
+<AccordionGroup>
+  <Accordion title="Readable" icon="book-open" iconType="solid" color="red">
+    **Status:** `readable`
+    
+    The table is accessible AND contains data. This is a **security concern** if the table contains sensitive information that shouldn't be publicly accessible.
+
+    ```typescript
+    {
+      status: "readable",
+      accessible: true,
+      hasData: true,
+      rowCount: 42  // Number of rows in the table
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Empty" icon="inbox" iconType="regular" color="yellow">
+    **Status:** `empty`
+    
+    The table is accessible but contains no data. While not immediately dangerous, this indicates the table lacks proper RLS policies.
+
+    ```typescript
+    {
+      status: "empty",
+      accessible: true,
+      hasData: false,
+      rowCount: 0
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Denied" icon="shield-halved" iconType="solid" color="green">
+    **Status:** `denied`
+    
+    Access to the table was blocked, indicating proper RLS policies are in place. This is the **desired state** for sensitive tables.
+
+    ```typescript
+    {
+      status: "denied",
+      accessible: false,
+      hasData: false
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## How Testing Works
+
+RLS testing is performed by the `testTableRead()` function, which executes a simple SELECT query with a limit:
+
+```typescript
+const { data, error } = await client
+  .schema(schema)
+  .from(table)
+  .select("*")
+  .limit(1);
+```
+
+### The Testing Algorithm
+
+<Steps>
+  <Step title="Attempt Read Access">
+    SupaScan tries to read one row from the table using `select("*").limit(1)`
+  </Step>
+  
+  <Step title="Check for Errors">
+    If an error occurs, the table is marked as **denied** (access blocked by RLS)
+    
+    ```typescript
+    if (error) {
+      return {
+        status: "denied",
+        accessible: false,
+        hasData: false,
+      };
+    }
+    ```
+  </Step>
+  
+  <Step title="Verify Data Presence">
+    If successful, check if any rows were returned
+    
+    ```typescript
+    const hasData = data && data.length > 0;
+    ```
+  </Step>
+  
+  <Step title="Count Rows (if readable)">
+    For readable tables, perform an estimated count to determine data volume
+    
+    ```typescript
+    const { count } = await client
+      .schema(schema)
+      .from(table)
+      .select("*", { count: "estimated", head: true });
+    ```
+  </Step>
+  
+  <Step title="Return Result">
+    Categorize the table as readable, empty, or denied based on the test results
+  </Step>
+</Steps>
+
+## Implementation Details
+
+The core testing logic from `packages/core/src/supabase.ts:260`:
+
+```typescript
+export async function* testTableRead(
+  client: SupabaseClient,
+  schema: string,
+  table: string,
+): AsyncGenerator<SupabaseEvent, Result<TableAccessResult>> {
+  yield { type: "table_access_test_started", data: { schema, table } };
+
+  const { data, error } = await client
+    .schema(schema)
+    .from(table)
+    .select("*")
+    .limit(1);
+
+  if (error) {
+    const result = {
+      status: "denied" as const,
+      accessible: false,
+      hasData: false,
+    };
+    yield {
+      type: "table_access_test_completed",
+      data: { schema, table, result },
+    };
+    return ok(result);
+  }
+
+  const hasData = data && data.length > 0;
+
+  if (hasData) {
+    const { count } = await client
+      .schema(schema)
+      .from(table)
+      .select("*", { count: "estimated", head: true });
+
+    const result = {
+      status: "readable" as const,
+      accessible: true,
+      hasData: true,
+      rowCount: count ?? undefined,
+    };
+    yield {
+      type: "table_access_test_completed",
+      data: { schema, table, result },
+    };
+    return ok(result);
+  }
+
+  const result = {
+    status: "empty" as const,
+    accessible: true,
+    hasData: false,
+    rowCount: 0,
+  };
+  yield {
+    type: "table_access_test_completed",
+    data: { schema, table, result },
+  };
+  return ok(result);
+}
+```
+
+## Batch Testing
+
+SupaScan tests all tables in a schema using `testTablesRead()`, which processes tables sequentially:
+
+```typescript
+export async function* testTablesRead(
+  client: SupabaseClient,
+  schema: string,
+  tables: string[],
+): AsyncGenerator<SupabaseEvent, Result<Record<string, TableAccessResult>>> {
+  const accessMap: Record<string, TableAccessResult> = {};
+
+  for (const table of tables) {
+    const gen = testTableRead(client, schema, table);
+    let result: TableAccessResult = {
+      status: "denied",
+      accessible: false,
+      hasData: false,
+    };
+
+    while (true) {
+      const next = await gen.next();
+      if (next.done) {
+        if (next.value && next.value.success) {
+          result = next.value.value;
+        }
+        break;
+      }
+      yield next.value;
+    }
+
+    accessMap[table] = result;
+  }
+
+  return ok(accessMap);
+}
+```
+
+This returns a mapping of table names to their access results, allowing you to quickly identify security issues.
+
+## Security Insights
+
+### What "Readable" Means
+
+<Warning>
+A **readable** status means that anyone with the anonymous key can query the table and retrieve data. This is a critical security issue if the table contains:
+- User personal information
+- Private messages or content
+- Financial data
+- Authentication credentials
+- Any other sensitive information
+</Warning>
+
+### What "Empty" Means
+
+<Info>
+An **empty** status means the table lacks RLS policies but happens to contain no data. While not immediately exploitable, this represents a security misconfiguration that could lead to data exposure when records are added.
+</Info>
+
+### What "Denied" Means
+
+<Check>
+A **denied** status indicates proper RLS policies are protecting the table. This is the expected result for tables that should not be publicly accessible.
+</Check>
+
+## Row Count Estimation
+
+For readable tables, SupaScan provides an estimated row count:
+
+```typescript
+const { count } = await client
+  .schema(schema)
+  .from(table)
+  .select("*", { count: "estimated", head: true });
+```
+
+The `estimated` count mode uses PostgreSQL's statistics and is fast even for large tables. This gives you a sense of how much data is exposed without downloading all rows.
+
+## Type Definitions
+
+The `TableAccessResult` type from `packages/core/src/types/supabase.types.ts:5`:
+
+```typescript
+export type TableAccessStatus = "denied" | "readable" | "empty";
+
+export type TableAccessResult = {
+  status: TableAccessStatus;
+  accessible: boolean;
+  hasData: boolean;
+  rowCount?: number;
+};
+```
+
+## Event-Driven Testing
+
+RLS testing emits events throughout the process:
+
+1. **`table_access_test_started`** - Testing begins for a table
+2. **`table_access_test_completed`** - Testing finishes with the result
+
+These events enable real-time progress tracking in the CLI and other interfaces.
+
+## Skipping Access Tests
+
+You can skip RLS testing during analysis:
+
+```typescript
+await analyze(client, url, key, { skipAccessTest: true });
+```
+
+This is useful when you only want to enumerate schema structure without testing security policies.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Schema Discovery" icon="database" href="/concepts/schema-discovery">
+    Learn how tables are discovered
+  </Card>
+  <Card title="Credential Extraction" icon="key" href="/concepts/credential-extraction">
+    Understand how credentials are found
+  </Card>
+</CardGroup>

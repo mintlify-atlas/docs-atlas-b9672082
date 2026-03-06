@@ -1,0 +1,240 @@
+---
+title: "Scanning Websites"
+description: "Learn how to automatically extract Supabase credentials from websites and perform security scans"
+---
+
+## Overview
+
+SupaScan can automatically extract Supabase credentials from any website by analyzing HTML pages and JavaScript bundles. This is useful for security testing and discovering potential exposures in production applications.
+
+<Info>
+The `-x` or `--extract` flag enables automatic credential extraction from websites.
+</Info>
+
+## Basic Website Scanning
+
+The simplest way to scan a website is to point SupaScan at any URL:
+
+```bash
+supascan -x https://example.com
+```
+
+This command will:
+
+1. Fetch the target webpage
+2. Parse inline `<script>` tags
+3. Download and analyze external JavaScript bundles
+4. Extract Supabase URL and anon key pairs
+5. Run a complete security analysis
+6. Display results in your terminal
+
+<Steps>
+  <Step title="Provide the target URL">
+    Use the `-x` flag followed by any website URL:
+    
+    ```bash
+    supascan -x https://myapp.com
+    ```
+  </Step>
+  
+  <Step title="Extraction process begins">
+    SupaScan will analyze the page content and display progress:
+    
+    - Fetching HTML content
+    - Detecting inline scripts
+    - Checking external JavaScript files
+    - Searching for Supabase credentials
+  </Step>
+  
+  <Step title="Review the results">
+    Once credentials are found, SupaScan automatically runs a full security analysis:
+    
+    - Database schema discovery
+    - Table access testing
+    - RPC function enumeration
+    - Row-level security (RLS) policy testing
+  </Step>
+</Steps>
+
+## How Credential Extraction Works
+
+SupaScan uses multiple strategies to locate Supabase credentials:
+
+### Pattern Matching
+
+SupaScan looks for:
+
+- Supabase URLs matching `https://*.supabase.co`
+- JWT tokens starting with `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`
+- URL-key pairs that appear close together in the source code
+
+### createBrowserClient Detection
+
+SupaScan specifically recognizes the Supabase JavaScript client initialization pattern:
+
+```javascript
+createBrowserClient("https://xyz.supabase.co", "eyJhbG...")
+```
+
+### Multi-Source Analysis
+
+The tool examines:
+
+1. **Inline scripts** - JavaScript code directly in `<script>` tags
+2. **External scripts** - Bundled `.js` files referenced via `<script src="...">`
+3. **Relative and absolute paths** - Resolves script URLs correctly
+
+## Scanning with HTML Reports
+
+Generate an interactive HTML report for easier analysis:
+
+```bash
+supascan -x https://example.com --html
+```
+
+This opens a browser with:
+
+- Interactive schema browser
+- Live table exploration
+- RPC function tester
+- Real-time query interface
+
+See [HTML Reports](/guides/html-reports) for more details.
+
+## Terminal Output Mode
+
+For command-line workflows, omit the `--html` flag:
+
+```bash
+supascan --extract https://example.com
+```
+
+<CodeGroup>
+```bash Example Command
+supascan --extract https://example.com
+```
+
+```text Example Output
+============================================================
+  SUPABASE DATABASE ANALYSIS
+============================================================
+
+TARGET SUMMARY
+--------------------
+Domain: xyz.supabase.co
+Project ID: xyz
+
+JWT TOKEN INFO
+--------------------
+Issuer: https://xyz.supabase.co/auth/v1
+Role: anon
+Expires: 2030-01-01T00:00:00.000Z
+
+DATABASE ANALYSIS
+--------------------
+Schemas discovered: 2
+
+Schema: public
+
+Tables: 8
+  3 exposed | 2 empty/protected | 3 denied
+
+  [+] users (~1420 rows exposed)
+  [+] posts (~892 rows exposed)
+  [+] comments (~3201 rows exposed)
+  [-] sessions (0 rows - empty or RLS)
+  [-] audit_logs (0 rows - empty or RLS)
+  [X] admin_users (access denied)
+  [X] secrets (access denied)
+  [X] internal_config (access denied)
+
+RPCs: 2
+  * get_public_stats
+    No parameters
+  * search_users
+    - query: string (required)
+    - limit: integer (optional)
+```
+</CodeGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No credentials found">
+    If SupaScan can't find credentials, try:
+    
+    - Verify the website actually uses Supabase
+    - Check if credentials are loaded dynamically after page load
+    - Look for credentials in the browser developer console
+    - Manually provide credentials with `--url` and `--key` flags
+    
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG...
+    ```
+  </Accordion>
+  
+  <Accordion title="Extraction fails with HTTP errors">
+    Common causes:
+    
+    - CORS policies blocking script access
+    - Authentication required to view the page
+    - Website blocking automated requests
+    
+    **Solution**: Download the page source manually and search for credentials, then use manual mode.
+  </Accordion>
+  
+  <Accordion title="Multiple credential pairs found">
+    SupaScan picks the closest URL-key pair based on proximity in the source code. If you need to test a specific instance:
+    
+    - Extract credentials manually
+    - Use the `--url` and `--key` flags explicitly
+  </Accordion>
+  
+  <Accordion title="Experimental warnings appear">
+    The `-x` extraction feature is marked experimental. Suppress warnings with:
+    
+    ```bash
+    supascan -x https://example.com --suppress-experimental-warnings
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Test your own sites first" icon="shield-check">
+    Always test your own applications to understand what information is exposed.
+  </Card>
+  
+  <Card title="Use HTML reports for deep analysis" icon="chart-line">
+    The `--html` flag provides better visibility into complex schemas.
+  </Card>
+  
+  <Card title="Document findings" icon="file-text">
+    Use `--json` output to save results for later analysis or reporting.
+  </Card>
+  
+  <Card title="Respect permissions" icon="scale-balanced">
+    Only scan sites you own or have explicit permission to test.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Analyzing Databases" icon="database" href="/guides/analyzing-databases">
+    Learn how to interpret scan results and understand database security.
+  </Card>
+  
+  <Card title="Dumping Data" icon="download" href="/guides/dumping-data">
+    Extract exposed table data for security analysis.
+  </Card>
+  
+  <Card title="HTML Reports" icon="browser" href="/guides/html-reports">
+    Explore the interactive HTML report interface.
+  </Card>
+  
+  <Card title="Custom Headers" icon="gear" href="/advanced/custom-headers">
+    Add authentication headers for authenticated scans.
+  </Card>
+</CardGroup>

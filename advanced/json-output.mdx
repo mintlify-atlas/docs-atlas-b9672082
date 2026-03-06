@@ -1,0 +1,399 @@
+---
+title: "JSON Output"
+description: "Export SupaScan results as JSON for automation, scripting, and integration"
+---
+
+## Overview
+
+SupaScan can output results as JSON using the `--json` flag. This enables:
+
+- Integration with security automation tools
+- Scripted analysis and reporting
+- Long-term storage and trending
+- Custom alerting and notifications
+- Data processing with tools like `jq`
+
+## Basic Usage
+
+Add the `--json` flag to any SupaScan command:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... --json
+```
+
+Output is printed to stdout as formatted JSON:
+
+```json
+{
+  "schemas": ["public", "auth"],
+  "schemaDetails": {
+    "public": {
+      "tables": ["users", "posts"],
+      "rpcs": ["get_user_stats"],
+      "tableAccess": {
+        "users": {
+          "status": "readable",
+          "accessible": true,
+          "hasData": true,
+          "rowCount": 1420
+        }
+      }
+    }
+  },
+  "summary": {
+    "domain": "xyz.supabase.co",
+    "jwtInfo": {
+      "role": "anon",
+      "iss": "https://xyz.supabase.co/auth/v1"
+    }
+  }
+}
+```
+
+## Output Structure
+
+JSON output varies by command:
+
+<Tabs>
+  <Tab title="Analysis">
+    Analysis results include schemas, tables, RPC functions, and access test results:
+    
+    ```json
+    {
+      "schemas": ["public", "auth"],
+      "schemaDetails": {
+        "public": {
+          "tables": ["users", "posts", "comments"],
+          "rpcs": ["get_stats", "search_users"],
+          "rpcFunctions": [
+            {
+              "name": "search_users",
+              "parameters": [
+                {
+                  "name": "query",
+                  "type": "string",
+                  "format": null,
+                  "required": true
+                }
+              ]
+            }
+          ],
+          "tableAccess": {
+            "users": {
+              "status": "readable",
+              "accessible": true,
+              "hasData": true,
+              "rowCount": 1420
+            },
+            "posts": {
+              "status": "denied",
+              "accessible": false,
+              "hasData": false
+            }
+          }
+        }
+      },
+      "summary": {
+        "domain": "xyz.supabase.co",
+        "jwtInfo": {
+          "role": "anon",
+          "iss": "https://xyz.supabase.co/auth/v1",
+          "iat": 1640000000,
+          "exp": 2000000000
+        },
+        "metadata": {
+          "service": "Supabase",
+          "region": "xyz"
+        }
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Table Dump">
+    Dumped table data includes rows and metadata:
+    
+    ```json
+    {
+      "rows": [
+        {
+          "id": 1,
+          "email": "user@example.com",
+          "created_at": "2024-01-01T00:00:00Z"
+        },
+        {
+          "id": 2,
+          "email": "admin@example.com",
+          "created_at": "2024-01-02T00:00:00Z"
+        }
+      ],
+      "count": 1420
+    }
+    ```
+  </Tab>
+  
+  <Tab title="RPC Call">
+    RPC results are returned as-is from the function:
+    
+    ```json
+    [
+      {
+        "user_id": "abc-123",
+        "username": "admin",
+        "total_posts": 42
+      },
+      {
+        "user_id": "def-456",
+        "username": "moderator",
+        "total_posts": 18
+      }
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+## Redirecting to Files
+
+Save JSON output to a file:
+
+```bash
+supascan --url https://xyz.supabase.co --key eyJhbG... --json > scan-results.json
+```
+
+<Info>
+SupaScan writes JSON to **stdout** and logs/errors to **stderr**, so you can safely redirect output without capturing error messages.
+</Info>
+
+## Processing with jq
+
+Use `jq` to query and transform JSON output:
+
+<AccordionGroup>
+  <Accordion title="Count Exposed Tables">
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --json | \
+      jq '[.schemaDetails[].tableAccess[] | select(.status == "readable")] | length'
+    ```
+    
+    Output: `3` (number of readable tables)
+  </Accordion>
+
+  <Accordion title="List Table Names by Status">
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --json | \
+      jq '.schemaDetails.public.tableAccess | to_entries | map(select(.value.status == "readable") | .key)'
+    ```
+    
+    Output: `["users", "posts", "comments"]`
+  </Accordion>
+
+  <Accordion title="Extract JWT Role">
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --json | \
+      jq -r '.summary.jwtInfo.role'
+    ```
+    
+    Output: `anon`
+  </Accordion>
+
+  <Accordion title="Get Total Row Counts">
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --json | \
+      jq '[.schemaDetails[].tableAccess[] | select(.rowCount != null) | .rowCount] | add'
+    ```
+    
+    Output: `5512` (total rows across all readable tables)
+  </Accordion>
+
+  <Accordion title="Format Exposed Tables Report">
+    ```bash
+    supascan --url https://xyz.supabase.co --key eyJhbG... --json | \
+      jq -r '.schemaDetails | to_entries[] | .key as $schema | .value.tableAccess | to_entries[] | select(.value.status == "readable") | "\($schema).\(.key): \(.value.rowCount) rows"'
+    ```
+    
+    Output:
+    ```
+    public.users: 1420 rows
+    public.posts: 892 rows
+    public.comments: 3200 rows
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Integration Examples
+
+<Tabs>
+  <Tab title="CI/CD Pipeline">
+    Fail builds if exposed tables are found:
+    
+    ```bash .github/workflows/security-scan.yml
+    name: Security Scan
+    on: [push]
+    
+    jobs:
+      scan:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Run SupaScan
+            run: |
+              npx supascan --url ${{ secrets.SUPABASE_URL }} --key ${{ secrets.SUPABASE_KEY }} --json > results.json
+          
+          - name: Check for exposed tables
+            run: |
+              exposed=$(jq '[.schemaDetails[].tableAccess[] | select(.status == "readable")] | length' results.json)
+              if [ "$exposed" -gt 0 ]; then
+                echo "ERROR: Found $exposed exposed tables!"
+                jq -r '.schemaDetails[].tableAccess | to_entries[] | select(.value.status == "readable") | .key' results.json
+                exit 1
+              fi
+    ```
+  </Tab>
+  
+  <Tab title="Slack Notifications">
+    Send alerts to Slack when issues are found:
+    
+    ```bash notify.sh
+    #!/bin/bash
+    
+    # Run scan
+    supascan --url $SUPABASE_URL --key $SUPABASE_KEY --json > scan.json
+    
+    # Count exposed tables
+    exposed=$(jq '[.schemaDetails[].tableAccess[] | select(.status == "readable")] | length' scan.json)
+    
+    if [ "$exposed" -gt 0 ]; then
+      # Build Slack message
+      tables=$(jq -r '.schemaDetails[].tableAccess | to_entries[] | select(.value.status == "readable") | .key' scan.json | paste -sd "," -)
+      
+      curl -X POST $SLACK_WEBHOOK_URL \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"text\": \"⚠️ SupaScan Alert: $exposed exposed tables found\",
+          \"attachments\": [{
+            \"color\": \"danger\",
+            \"fields\": [{
+              \"title\": \"Exposed Tables\",
+              \"value\": \"$tables\"
+            }]
+          }]
+        }"
+    fi
+    ```
+  </Tab>
+  
+  <Tab title="Security Dashboard">
+    Store results in a database for trending:
+    
+    ```python store_results.py
+    import json
+    import sqlite3
+    from datetime import datetime
+    import subprocess
+    
+    # Run scan
+    result = subprocess.run(
+        ['supascan', '--url', SUPABASE_URL, '--key', SUPABASE_KEY, '--json'],
+        capture_output=True,
+        text=True
+    )
+    
+    scan_data = json.loads(result.stdout)
+    
+    # Store in database
+    conn = sqlite3.connect('security_scans.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO scans (timestamp, exposed_tables, total_tables, raw_data)
+        VALUES (?, ?, ?, ?)
+    ''', (
+        datetime.now(),
+        len([t for t in scan_data['schemaDetails']['public']['tableAccess'].values() if t['status'] == 'readable']),
+        len(scan_data['schemaDetails']['public']['tables']),
+        json.dumps(scan_data)
+    ))
+    
+    conn.commit()
+    conn.close()
+    ```
+  </Tab>
+  
+  <Tab title="Comparison Script">
+    Compare scans over time:
+    
+    ```bash compare.sh
+    #!/bin/bash
+    
+    # Run scan and save
+    supascan --url $SUPABASE_URL --key $SUPABASE_KEY --json > scan-$(date +%Y%m%d).json
+    
+    # Compare with previous scan
+    if [ -f scan-previous.json ]; then
+      echo "Comparing with previous scan..."
+      
+      # Get table lists
+      current=$(jq -r '.schemaDetails.public.tableAccess | to_entries[] | select(.value.status == "readable") | .key' scan-$(date +%Y%m%d).json | sort)
+      previous=$(jq -r '.schemaDetails.public.tableAccess | to_entries[] | select(.value.status == "readable") | .key' scan-previous.json | sort)
+      
+      # Find new exposures
+      new=$(comm -13 <(echo "$previous") <(echo "$current"))
+      
+      if [ -n "$new" ]; then
+        echo "⚠️ NEW EXPOSED TABLES:"
+        echo "$new"
+      else
+        echo "✅ No new exposures"
+      fi
+    fi
+    
+    # Update previous
+    cp scan-$(date +%Y%m%d).json scan-previous.json
+    ```
+  </Tab>
+</Tabs>
+
+## Output vs HTML
+
+<Warning>
+You cannot use `--json` and `--html` together. Choose one output format per run.
+</Warning>
+
+| Format | Use Case | Pros | Cons |
+|--------|----------|------|------|
+| **--json** | Automation, scripting, CI/CD | Machine-readable, pipeable, parseable | Not human-friendly |
+| **--html** | Manual inspection, reporting | Interactive, visual, easy to explore | Not scriptable |
+| **Console** (default) | Quick checks, terminal use | Human-readable, colored output | Hard to parse |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Automation" icon="robot">
+    - Always redirect to files for persistence
+    - Use `jq` for JSON processing
+    - Validate JSON structure before parsing
+    - Store scan history for trending
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation">
+    - Check exit codes: `$?` (0 = success)
+    - Parse stderr for error messages
+    - Validate JSON with `jq empty`
+    - Handle missing fields gracefully
+  </Card>
+</CardGroup>
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="Output Formats" icon="file" href="/cli/output-formats">
+    Complete guide to all output formats
+  </Card>
+  <Card title="Environment Variables" icon="dollar-sign" href="/advanced/environment-variables">
+    Using environment variables for automation
+  </Card>
+  <Card title="CLI Options" icon="terminal" href="/cli/options">
+    All available command-line options
+  </Card>
+  <Card title="Analyzing Databases" icon="database" href="/guides/analyzing-databases">
+    Guide to database analysis
+  </Card>
+</CardGroup>

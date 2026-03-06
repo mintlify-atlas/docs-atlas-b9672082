@@ -1,0 +1,127 @@
+---
+title: Introduction
+description: Security scanner for Supabase databases - automatically detect exposed data, analyze RLS policies, and test RPC functions
+---
+
+## What is SupaScan?
+
+SupaScan is an automated security scanner for Supabase databases. Point it at any website using Supabase and it will extract credentials, discover database schemas, test Row Level Security (RLS) policies, and identify exposed data.
+
+<Note>
+SupaScan uses only the publicly available anon key to perform security analysis - the same credentials exposed to every visitor of a website.
+</Note>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Credential Extraction" icon="key">
+    Automatically discovers Supabase URLs and anon keys from website HTML and JavaScript bundles
+  </Card>
+  
+  <Card title="Schema Discovery" icon="database">
+    Enumerates all accessible database schemas, tables, columns, and RPC functions
+  </Card>
+  
+  <Card title="RLS Testing" icon="shield">
+    Tests Row Level Security policies to identify exposed, protected, and denied tables
+  </Card>
+  
+  <Card title="Interactive Reports" icon="chart-bar">
+    Generates HTML reports with schema browsers, table explorers, and RPC testers
+  </Card>
+</CardGroup>
+
+## How It Works
+
+SupaScan operates in three phases:
+
+<Steps>
+  <Step title="Extract Credentials">
+    Fetches the target website, parses inline scripts and external JavaScript bundles, and extracts the Supabase URL and anon key using pattern matching.
+  </Step>
+  
+  <Step title="Analyze Database">
+    Connects to the Supabase instance using the discovered credentials and systematically discovers:
+    - Available schemas (public, auth, etc.)
+    - Tables and their columns
+    - RPC functions and their parameters
+    - Row counts for accessible tables
+  </Step>
+  
+  <Step title="Generate Report">
+    Produces a detailed security report showing:
+    - Exposed tables with row counts
+    - Empty or RLS-protected tables
+    - Access-denied tables
+    - Callable RPC functions
+  </Step>
+</Steps>
+
+## Use Cases
+
+### Security Auditing
+
+Identify misconfigured RLS policies before attackers do. SupaScan shows exactly what data is accessible with the public anon key.
+
+### Penetration Testing
+
+Perform authorized security assessments of Supabase-powered applications to find data exposure vulnerabilities.
+
+### Development Validation
+
+Verify that your RLS policies are working as intended during development and before production deployment.
+
+<Warning>
+SupaScan should only be used for authorized security testing. Always obtain permission before scanning databases you don't own.
+</Warning>
+
+## Example Output
+
+When scanning a website, SupaScan provides detailed information about discovered vulnerabilities:
+
+```bash
+============================================================
+  SUPABASE DATABASE ANALYSIS
+============================================================
+
+TARGET SUMMARY
+--------------------
+Domain: xyz.supabase.co
+Project ID: xyz
+
+JWT TOKEN INFO
+--------------------
+Issuer: https://xyz.supabase.co/auth/v1
+Role: anon
+Expires: 2030-01-01T00:00:00.000Z
+
+DATABASE ANALYSIS
+--------------------
+Schemas discovered: 2
+
+Schema: public
+
+Tables: 8
+  3 exposed | 2 empty/protected | 3 denied
+
+  [+] users (~1420 rows exposed)
+  [+] posts (~892 rows exposed)
+  [+] comments (~3201 rows exposed)
+  [-] sessions (0 rows - empty or RLS)
+  [-] audit_logs (0 rows - empty or RLS)
+  [X] admin_users (access denied)
+  [X] secrets (access denied)
+  [X] internal_config (access denied)
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install SupaScan using npm or bun
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Run your first security scan in minutes
+  </Card>
+</CardGroup>

@@ -1,0 +1,115 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "SupaScan",
+  "projectDescription": "Automated security scanner for Supabase databases - detect exposed data, analyze RLS policies, and test RPC functions",
+  "theme": "aspen",
+  "primaryColor": "#848c8e",
+  "lightColor": "#11161e",
+  "darkColor": "#cfd0d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/credential-extraction",
+              "concepts/rls-testing",
+              "concepts/schema-discovery"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/scanning-websites",
+              "guides/analyzing-databases",
+              "guides/dumping-data",
+              "guides/testing-rpcs",
+              "guides/html-reports"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/custom-headers",
+              "advanced/environment-variables",
+              "advanced/json-output"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "cli/analyze",
+              "cli/dump",
+              "cli/rpc",
+              "cli/extract"
+            ]
+          },
+          {
+            "group": "Options",
+            "pages": [
+              "cli/options",
+              "cli/output-formats"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API",
+        "groups": [
+          {
+            "group": "Core Library",
+            "pages": [
+              "api/overview",
+              "api/analyzer",
+              "api/extractor",
+              "api/supabase-client"
+            ]
+          },
+          {
+            "group": "Types",
+            "pages": [
+              "api/types/analysis-result",
+              "api/types/extractor-events",
+              "api/types/table-access"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Automated credential extraction from websites",
+    "Database schema discovery and enumeration",
+    "Row-Level Security (RLS) policy testing",
+    "RPC function discovery and testing",
+    "Interactive HTML reports",
+    "Data dumping from exposed tables",
+    "JWT token analysis",
+    "Multiple output formats (console, JSON, HTML)"
+  ],
+  "publicApiSurface": [
+    "analyze(client, url, key, options)",
+    "extractFromUrl(url)",
+    "dumpTable(client, schema, table, limit)",
+    "callRPC(client, schema, rpcName, args, options)",
+    "getSchemas(client)",
+    "getTables(client, schema)",
+    "getRPCs(client, schema)",
+    "testTablesRead(client, schema, tables)"
+  ]
+}
